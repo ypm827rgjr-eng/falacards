@@ -24,6 +24,11 @@ const BUNDLED_DECKS = [
     ["achievements","conquistas, realizações\nLet's review your achievements this year."],
     ["quarter","trimestre\nSales grew in the third quarter."],
     ["identify","identificar\nWe need to identify the main risks."],
+    ["strength","ponto forte, força\nAttention to detail is one of my strengths."],
+    ["development","desenvolvimento\nWe should focus on your professional development."],
+    ["enhance","melhorar, aprimorar\nThis tool will enhance our reporting."],
+    ["feedback","retorno, feedback\nThank you for the feedback."],
+    ["appreciate","agradecer, valorizar\nI really appreciate your help."],
   ]},
 ];
 
