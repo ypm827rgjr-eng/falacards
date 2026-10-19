@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FalaCards</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="FalaCards">
+<meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+:root{
+  --bg:#f4f6fb; --card:#ffffff; --text:#111827; --muted:#6b7280; --line:#e5e7eb;
+  --primary:#2563eb; --primary-soft:#dbeafe;
+  --ok:#16a34a; --ok-soft:#dcfce7; --warn:#d97706; --warn-soft:#fef3c7; --bad:#dc2626; --bad-soft:#fee2e2;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0b1020; --card:#151b2e; --text:#e5e7eb; --muted:#9ca3af; --line:#263049;
+    --primary:#60a5fa; --primary-soft:#1e3a5f;
+    --ok:#4ade80; --ok-soft:#14361f; --warn:#fbbf24; --warn-soft:#3d2f0b; --bad:#f87171; --bad-soft:#3f1717;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:8px;
+  padding:12px 16px;border-bottom:1px solid var(--line)}
+header h1{flex:1;font-size:19px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+main{max-width:640px;margin:0 auto;padding:16px}
+button,select,input,textarea{font:inherit;color:inherit}
+button{border:0;border-radius:12px;padding:12px 14px;background:var(--card);border:1px solid var(--line);cursor:pointer}
+button:active{transform:scale(.97)}
+button.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+button.ghost{background:transparent;border-color:transparent;padding:8px 10px}
+button.small{padding:7px 10px;font-size:14px}
+button:disabled{opacity:.45}
+input,select,textarea{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card)}
+textarea{min-height:90px;resize:vertical}
+label{display:block;font-size:14px;color:var(--muted);margin:12px 0 4px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center}
+.row > *{flex:1}
+.muted{color:var(--muted);font-size:14px}
+.deck{display:flex;align-items:center;gap:12px}
+.deck .info{flex:1;min-width:0}
+.deck .name{font-weight:600;font-size:17px}
+.pill{display:inline-block;font-size:13px;padding:2px 8px;border-radius:999px;margin-right:4px}
+.pill.new{background:var(--primary-soft);color:var(--primary)}
+.pill.due{background:var(--ok-soft);color:var(--ok)}
+.hidden{display:none!important}
+.front{font-size:26px;font-weight:600;text-align:center;margin:18px 0 6px;word-wrap:break-word}
+.front .w{cursor:pointer;border-radius:6px;padding:0 2px}
+.front .w:active{background:var(--primary-soft)}
+.back{font-size:19px;text-align:center;color:var(--muted);margin:10px 0;white-space:pre-wrap}
+.tools{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:14px 0}
+.mic{width:84px;height:84px;border-radius:50%;font-size:34px;background:var(--primary);color:#fff;border:0;display:block;margin:10px auto}
+.mic.on{background:var(--bad);animation:pulse 1s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 14px rgba(220,38,38,.18)}}
+.result{text-align:center}
+.score{font-size:44px;font-weight:700;margin:4px 0}
+.wres{font-size:21px;line-height:1.9}
+.wres span{padding:1px 5px;border-radius:6px;margin:0 1px;white-space:nowrap}
+.w-ok{background:var(--ok-soft);color:var(--ok)}
+.w-near{background:var(--warn-soft);color:var(--warn)}
+.w-bad{background:var(--bad-soft);color:var(--bad);text-decoration:underline wavy}
+.w-miss{background:var(--bad-soft);color:var(--bad);opacity:.7;text-decoration:line-through}
+.heard{margin-top:8px;font-size:15px;color:var(--muted)}
+.grades{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px}
+.grades button{padding:10px 4px;font-size:14px;line-height:1.2}
+.grades button small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.grades button.sug{outline:3px solid var(--primary);outline-offset:1px}
+.g1{color:var(--bad)} .g2{color:var(--warn)} .g3{color:var(--ok)} .g4{color:var(--primary)}
+.cardline{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.cardline:last-child{border-bottom:0}
+.cardline .t{flex:1;min-width:0}
+.cardline .t div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:#111827;color:#fff;padding:10px 16px;border-radius:12px;font-size:15px;z-index:20;max-width:90%;text-align:center}
+.legend{font-size:13px;color:var(--muted);margin-top:8px}
+.legend span{padding:0 5px;border-radius:5px}
+.progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:10px}
+.progress div{height:100%;background:var(--primary);width:0}
+</style>
+</head>
+<body>
+<header>
+  <button class="ghost hidden" id="backBtn" aria-label="Voltar">‹ Voltar</button>
+  <h1 id="title">FalaCards</h1>
+  <button class="ghost" id="settingsBtn" aria-label="Ajustes">⚙️</button>
+</header>
+<main id="app"></main>
+
+<script>
+"use strict";
+/* ============ Dados ============ */
+const KEY = "falacards_v1";
+const LANGS = [
+  ["en-US","Inglês (EUA)"],["en-GB","Inglês (Reino Unido)"],["es-ES","Espanhol (Espanha)"],
+  ["es-MX","Espanhol (México)"],["fr-FR","Francês"],["it-IT","Italiano"],["de-DE","Alemão"],["pt-BR","Português"]
+];
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const DAY = 86400000;
+
+function sampleDeck(){
+  const id = uid();
+  const pairs = [
+    ["Hi, how are you doing today?","Oi, como você está hoje?"],
+    ["Could you repeat that, please?","Você poderia repetir, por favor?"],
+    ["I'd like to schedule an appointment.","Eu gostaria de marcar um horário."],
+    ["Where is the nearest pharmacy?","Onde fica a farmácia mais próxima?"],
+    ["I'm looking for an apartment to rent.","Estou procurando um apartamento para alugar."],
+    ["How much does it cost?","Quanto custa?"],
+    ["I work as an accountant.","Eu trabalho como contador."],
+    ["Can I pay with a credit card?","Posso pagar com cartão de crédito?"],
+    ["Thank you so much for your help.","Muito obrigado pela sua ajuda."],
+    ["What time does the store open?","Que horas a loja abre?"],
+    ["I have a reservation under my name.","Tenho uma reserva no meu nome."],
+    ["Nice to meet you.","Prazer em conhecer você."],
+    ["through","através de"],["thought","pensamento / pensei"],["world","mundo"],["comfortable","confortável"],
+  ];
+  return {deck:{id,name:"Inglês – Primeiros passos",lang:"en-US"},
+    cards:pairs.map(([f,b])=>newCard(id,f,b))};
+}
+function newCard(deckId, front, back){
+  return {id:uid(),deckId,front:front.trim(),back:(back||"").trim(),
+    isNew:true,due:0,interval:0,ease:2.5,reps:0,lapses:0,lastScore:null,created:Date.now()};
+}
+function load(){
+  try{ const d = JSON.parse(localStorage.getItem(KEY)); if(d && d.decks) return d; }catch(e){}
+  const s = sampleDeck();
+  return {decks:[s.deck],cards:s.cards,
+    settings:{rate:0.95,newPerDay:15,voices:{},listenMode:false,autoPlay:true,strict:false},
+    log:{}};
+}
+let DB = load();
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(DB)); }
+  catch(e){ toast("Não foi possível salvar: armazenamento cheio?"); }
+}
+save();
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+
+const today = () => new Date().toISOString().slice(0,10);
+function dayLog(){ const t=today(); DB.log[t] = DB.log[t] || {newDone:0,reviews:0}; return DB.log[t]; }
+
+/* ============ Repetição espaçada (estilo Anki / SM-2) ============ */
+function endOfToday(){ const d=new Date(); d.setHours(23,59,59,999); return d.getTime(); }
+function preview(card, g){ // devolve {interval(dias), due(ms), label}
+  const now = Date.now();
+  let iv = card.interval, ease = card.ease;
+  if (g === 1) return {due: now + 60*1000, interval: 0, ease: Math.max(1.3, ease-0.2), label:"1 min"};
+  if (card.isNew || iv === 0){
+    if (g === 2) return {due: now + 6*60*1000, interval: 0, ease, label:"6 min"};
+    if (g === 3) iv = 1;
+    if (g === 4) { iv = 4; ease += 0.15; }
+  } else {
+    if (g === 2){ iv = Math.max(1, iv*1.2); ease = Math.max(1.3, ease-0.15); }
+    if (g === 3){ iv = iv*ease; }
+    if (g === 4){ iv = iv*ease*1.3; ease += 0.15; }
+  }
+  iv = Math.max(1, Math.round(iv));
+  const d = new Date(); d.setHours(4,0,0,0); // vence às 4h do dia
+  return {due: d.getTime() + iv*DAY, interval: iv, ease, label: fmtDays(iv)};
+}
+function fmtDays(n){ if(n<30) return n+"d"; if(n<365) return (n/30).toFixed(1).replace(".0","")+" m"; return (n/365).toFixed(1)+" a"; }
+function answer(card, g){
+  const p = preview(card, g), log = dayLog();
+  if (card.isNew) log.newDone++; else log.reviews++;
+  if (g === 1 && !card.isNew && card.interval > 0) card.lapses++;
+  card.isNew = false; card.reps++;
+  card.interval = p.interval; card.ease = p.ease; card.due = p.due;
+  save();
+}
+function counts(deckId){
+  const now = Date.now(), cs = DB.cards.filter(c=>c.deckId===deckId);
+  const newLeft = Math.max(0, DB.settings.newPerDay - (dayLog().newDone||0));
+  return {
+    due: cs.filter(c=>!c.isNew && c.due <= endOfToday()).length,
+    nu: Math.min(newLeft, cs.filter(c=>c.isNew).length),
+    total: cs.length
+  };
+}
+function nextCard(deckId){
+  const now = Date.now();
+  const cs = DB.cards.filter(c=>c.deckId===deckId);
+  const learning = cs.filter(c=>!c.isNew && c.interval===0 && c.due<=now).sort((a,b)=>a.due-b.due);
+  if (learning.length) return learning[0];
+  const due = cs.filter(c=>!c.isNew && c.interval>0 && c.due<=endOfToday()).sort((a,b)=>a.due-b.due);
+  if (due.length) return due[0];
+  if ((dayLog().newDone||0) < DB.settings.newPerDay){
+    const nu = cs.filter(c=>c.isNew).sort((a,b)=>a.created-b.created);
+    if (nu.length) return nu[0];
+  }
+  const soon = cs.filter(c=>!c.isNew && c.interval===0).sort((a,b)=>a.due-b.due);
+  if (soon.length) return {wait: soon[0].due - now, card: soon[0]};
+  return null;
+}
+
+/* ============ Voz (texto → fala) ============ */
+const synth = window.speechSynthesis;
+let voices = [];
+function loadVoices(){ voices = synth ? synth.getVoices() : []; }
+if (synth){ loadVoices(); synth.onvoiceschanged = loadVoices; }
+function voicesFor(lang){
+  const base = lang.slice(0,2);
+  return voices.filter(v=>v.lang.replace("_","-").startsWith(base))
+    .sort((a,b)=>(b.lang.replace("_","-")===lang)-(a.lang.replace("_","-")===lang));
+}
+function pickVoice(lang){
+  const uri = DB.settings.voices[lang];
+  const list = voicesFor(lang);
+  return list.find(v=>v.voiceURI===uri) || list.find(v=>/premium|enhanced|aprimorad/i.test(v.name)) || list[0] || null;
+}
+function speak(text, lang, rate){
+  if (!synth) { toast("Este navegador não tem leitura em voz alta."); return; }
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang; u.rate = rate || DB.settings.rate;
+  const v = pickVoice(lang); if (v) u.voice = v;
+  synth.speak(u);
+}
+
+/* ============ Reconhecimento de fala ============ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+function listen(lang, onDone, onState){
+  if (!SR){ onDone(null, "unsupported"); return; }
+  if (synth) synth.cancel();
+  rec = new SR();
+  rec.lang = lang; rec.interimResults = false; rec.continuous = false; rec.maxAlternatives = 5;
+  let got = false;
+  rec.onstart = () => onState(true);
+  rec.onresult = e => {
+    got = true;
+    const alts = [];
+    const r = e.results[0];
+    for (let i=0;i<r.length;i++) alts.push({text:r[i].transcript, conf:r[i].confidence});
+    onDone(alts, null);
+  };
+  rec.onerror = e => { got = true; onState(false); onDone(null, e.error); };
+  rec.onend = () => { onState(false); if(!got) onDone(null, "no-speech"); rec = null; };
+  try { rec.start(); } catch(err){ onState(false); onDone(null, "start-failed"); }
+}
+function stopListen(){ if (rec) try{ rec.stop(); }catch(e){} }
+
+/* ============ Avaliação da pronúncia ============ */
+const CONTR = {"i'm":"i am","you're":"you are","we're":"we are","they're":"they are","he's":"he is","she's":"she is",
+  "it's":"it is","that's":"that is","what's":"what is","there's":"there is","i'd":"i would","you'd":"you would",
+  "i'll":"i will","you'll":"you will","we'll":"we will","i've":"i have","you've":"you have","we've":"we have",
+  "can't":"can not","cannot":"can not","won't":"will not","don't":"do not","doesn't":"does not","didn't":"did not",
+  "isn't":"is not","aren't":"are not","wasn't":"was not","weren't":"were not","couldn't":"could not",
+  "wouldn't":"would not","shouldn't":"should not","let's":"let us","gonna":"going to","wanna":"want to"};
+const NUMS = {"0":"zero","1":"one","2":"two","3":"three","4":"four","5":"five","6":"six","7":"seven","8":"eight",
+  "9":"nine","10":"ten","11":"eleven","12":"twelve","15":"fifteen","20":"twenty","30":"thirty","100":"hundred"};
+function norm(text, lang){
+  let t = text.toLowerCase().replace(/[’`´]/g,"'").normalize("NFC");
+  const en = lang.startsWith("en");
+  // separa pontuação, mantém apóstrofo dentro de palavra
+  let words = t.replace(/[^\p{L}\p{N}'\s-]/gu," ").replace(/-/g," ").split(/\s+/).filter(Boolean);
+  let out = [];
+  for (let w of words){
+    w = w.replace(/^'+|'+$/g,"");
+    if (!w) continue;
+    if (en && CONTR[w]) { out.push(...CONTR[w].split(" ")); continue; }
+    if (en && NUMS[w]) { out.push(NUMS[w]); continue; }
+    if (en) w = w.replace(/'s$/,"s").replace(/'/g,"");
+    out.push(w);
+  }
+  return out;
+}
+function deaccent(s){ return s.normalize("NFD").replace(/\p{M}/gu,""); }
+function charSim(a,b){
+  if (a===b) return 1;
+  a = deaccent(a); b = deaccent(b);
+  if (a===b) return 0.9;
+  const m=a.length,n=b.length; if(!m||!n) return 0;
+  let prev = Array.from({length:n+1},(_,j)=>j), cur = new Array(n+1);
+  for (let i=1;i<=m;i++){ cur[0]=i;
+    for (let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    [prev,cur]=[cur,prev]; }
+  return 1 - prev[n]/Math.max(m,n);
+}
+// alinhamento palavra a palavra (Levenshtein com custo de substituição suave)
+function align(target, heard){
+  const m=target.length, n=heard.length;
+  const D = Array.from({length:m+1},()=>new Array(n+1).fill(0));
+  const B = Array.from({length:m+1},()=>new Array(n+1).fill(""));
+  for (let i=1;i<=m;i++){ D[i][0]=i; B[i][0]="del"; }
+  for (let j=1;j<=n;j++){ D[0][j]=j*0.6; B[0][j]="ins"; }
+  for (let i=1;i<=m;i++) for (let j=1;j<=n;j++){
+    const sim = charSim(target[i-1], heard[j-1]);
+    const sub = D[i-1][j-1] + (1-sim)*1.2;
+    const del = D[i-1][j] + 1, ins = D[i][j-1] + 0.6;
+    if (sub<=del && sub<=ins){ D[i][j]=sub; B[i][j]="sub"; }
+    else if (del<=ins){ D[i][j]=del; B[i][j]="del"; }
+    else { D[i][j]=ins; B[i][j]="ins"; }
+  }
+  const ops=[]; let i=m,j=n;
+  while(i>0||j>0){
+    const b=B[i][j];
+    if (b==="sub"){ ops.push({t:target[i-1],h:heard[j-1],sim:charSim(target[i-1],heard[j-1])}); i--; j--; }
+    else if (b==="del"){ ops.push({t:target[i-1],h:null,sim:0}); i--; }
+    else { ops.push({t:null,h:heard[j-1],sim:0}); j--; }
+  }
+  return ops.reverse();
+}
+function evaluate(targetText, alts, lang){
+  const target = norm(targetText, lang);
+  let best = null;
+  for (const a of alts){
+    const heard = norm(a.text, lang);
+    const ops = align(target, heard);
+    let credit = 0, extra = 0;
+    for (const o of ops){
+      if (o.t){ credit += o.sim >= 0.999 ? 1 : (o.sim >= 0.9 ? 0.9 : (o.sim >= 0.6 ? o.sim*0.6 : 0)); }
+      else extra++;
+    }
+    let score = target.length ? (credit/target.length)*100 : 0;
+    score -= Math.min(15, extra*5);
+    score = Math.max(0, Math.round(score));
+    if (!best || score > best.score) best = {score, ops, heard:a.text, conf:a.conf};
+  }
+  return best;
+}
+function suggestGrade(score){
+  const s = DB.settings.strict ? score - 8 : score;
+  return s >= 95 ? 4 : s >= 80 ? 3 : s >= 55 ? 2 : 1;
+}
+
+/* ============ UI ============ */
+const $app = document.getElementById("app");
+const $title = document.getElementById("title");
+const $back = document.getElementById("backBtn");
+let stack = [];
+const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(msg, ms=2600){
+  const t=document.createElement("div"); t.className="toast"; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(), ms);
+}
+function go(view, arg, replace){
+  stopListen(); if (synth) synth.cancel();
+  if (!replace && stack.length) {}
+  if (replace) stack[stack.length-1] = [view,arg]; else stack.push([view,arg]);
+  render();
+}
+function back(){ stopListen(); if (synth) synth.cancel(); stack.pop(); if(!stack.length) stack=[["home"]]; render(); }
+$back.onclick = back;
+document.getElementById("settingsBtn").onclick = () => go("settings");
+function render(){
+  const [view,arg] = stack[stack.length-1];
+  $back.classList.toggle("hidden", stack.length<=1);
+  window.scrollTo(0,0);
+  VIEWS[view](arg);
+}
+const deckById = id => DB.decks.find(d=>d.id===id);
+
+const VIEWS = {
+home(){
+  $title.textContent = "FalaCards";
+  let h = "";
+  if (!SR) h += `<div class="box" style="border-color:var(--warn)"><b>Reconhecimento de voz indisponível aqui.</b>
+    <div class="muted">Abra no Safari do iPhone. Se instalou na Tela de Início e o microfone não funcionar, use pelo Safari mesmo.</div></div>`;
+  for (const d of DB.decks){
+    const c = counts(d.id);
+    h += `<div class="box deck" data-deck="${d.id}">
+      <div class="info"><div class="name">${esc(d.name)}</div>
+      <div class="muted">${esc(langName(d.lang))} · ${c.total} cartões</div>
+      <div style="margin-top:6px"><span class="pill new">${c.nu} novos</span><span class="pill due">${c.due} revisar</span></div></div>
+      <button class="primary small" data-study="${d.id}" ${c.nu+c.due? "":"disabled"}>Estudar</button></div>`;
+  }
+  h += `<div class="row"><button id="newDeck">+ Novo baralho</button><button id="importBtn">Importar</button></div>`;
+  const l = dayLog();
+  h += `<p class="muted" style="text-align:center;margin-top:18px">Hoje: ${l.newDone} novos · ${l.reviews} revisões</p>`;
+  $app.innerHTML = h;
+  $app.querySelectorAll("[data-deck]").forEach(el=>el.onclick=e=>{
+    if (e.target.dataset.study) return go("study", e.target.dataset.study);
+    go("deck", el.dataset.deck);
+  });
+  document.getElementById("newDeck").onclick = () => go("deckEdit", null);
+  document.getElementById("importBtn").onclick = () => go("import", null);
+},
+
+deck(id){
+  const d = deckById(id); if(!d) return back();
+  $title.textContent = d.name;
+  const c = counts(id);
+  const cs = DB.cards.filter(x=>x.deckId===id).sort((a,b)=>b.created-a.created);
+  let h = `<div class="box"><div class="row">
+      <button class="primary" id="study" ${c.nu+c.due?"":"disabled"}>Estudar (${c.nu+c.due})</button>
+      <button id="add">+ Cartão</button></div>
+    <div class="row" style="margin-top:8px"><button class="small" id="edit">Editar baralho</button>
+      <button class="small" id="imp">Importar lista</button></div></div>`;
+  h += `<div class="box">`;
+  if (!cs.length) h += `<p class="muted">Nenhum cartão ainda.</p>`;
+  for (const k of cs){
+    const st = k.isNew ? "novo" : (k.interval ? "em " + fmtDays(Math.max(0,Math.ceil((k.due-Date.now())/DAY))) : "aprendendo");
+    h += `<div class="cardline"><button class="ghost" data-say="${k.id}" aria-label="Ouvir">🔊</button>
+      <div class="t" data-edit="${k.id}"><div><b>${esc(k.front)}</b></div><div class="muted">${esc(k.back)}</div></div>
+      <div class="muted" style="text-align:right;font-size:12px">${st}${k.lastScore!=null?"<br>"+k.lastScore+"%":""}</div></div>`;
+  }
+  h += `</div>`;
+  $app.innerHTML = h;
+  document.getElementById("study").onclick = () => go("study", id);
+  document.getElementById("add").onclick = () => go("cardEdit", {deckId:id});
+  document.getElementById("edit").onclick = () => go("deckEdit", id);
+  document.getElementById("imp").onclick = () => go("import", id);
+  $app.querySelectorAll("[data-say]").forEach(b=>b.onclick=()=>{
+    const k = DB.cards.find(x=>x.id===b.dataset.say); speak(k.front, d.lang); });
+  $app.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>go("cardEdit",{id:b.dataset.edit}));
+},
+
+deckEdit(id){
+  const d = id ? deckById(id) : {name:"",lang:"en-US"};
+  $title.textContent = id ? "Editar baralho" : "Novo baralho";
+  $app.innerHTML = `<div class="box">
+    <label>Nome</label><input id="n" value="${esc(d.name)}" placeholder="Ex.: Inglês – trabalho">
+    <label>Idioma que você vai falar</label><select id="l">${LANGS.map(([c,n])=>`<option value="${c}" ${c===d.lang?"selected":""}>${n}</option>`).join("")}</select>
+    <div class="row" style="margin-top:16px"><button class="primary" id="s">Salvar</button></div>
+    ${id?`<div class="row" style="margin-top:8px"><button id="del" style="color:var(--bad)">Apagar baralho</button></div>`:""}
+  </div>`;
+  document.getElementById("s").onclick = () => {
+    const name = document.getElementById("n").value.trim(); if(!name) return toast("Dê um nome ao baralho.");
+    const lang = document.getElementById("l").value;
+    if (id){ d.name=name; d.lang=lang; save(); back(); }
+    else { const nd={id:uid(),name,lang}; DB.decks.push(nd); save(); go("deck", nd.id, true); }
+  };
+  if (id) document.getElementById("del").onclick = () => {
+    if (!confirm("Apagar o baralho e todos os cartões?")) return;
+    DB.decks = DB.decks.filter(x=>x.id!==id); DB.cards = DB.cards.filter(x=>x.deckId!==id); save();
+    stack=[["home"]]; render();
+  };
+},
+
+cardEdit(arg){
+  const k = arg.id ? DB.cards.find(x=>x.id===arg.id) : null;
+  const deckId = k ? k.deckId : arg.deckId, d = deckById(deckId);
+  $title.textContent = k ? "Editar cartão" : "Novo cartão";
+  $app.innerHTML = `<div class="box">
+    <label>Frente – o que você vai falar (${esc(langName(d.lang))})</label>
+    <textarea id="f" placeholder="Ex.: Could you help me, please?">${k?esc(k.front):""}</textarea>
+    <div class="row" style="margin-top:6px"><button class="small" id="hear">🔊 Ouvir</button></div>
+    <label>Verso – tradução ou anotação</label>
+    <textarea id="b" placeholder="Ex.: Você poderia me ajudar, por favor?">${k?esc(k.back):""}</textarea>
+    <div class="row" style="margin-top:16px"><button class="primary" id="s">${k?"Salvar":"Adicionar"}</button></div>
+    ${k?`<div class="row" style="margin-top:8px"><button id="reset">Recomeçar como novo</button><button id="del" style="color:var(--bad)">Apagar</button></div>`:""}
+  </div>`;
+  document.getElementById("hear").onclick = () => { const t=document.getElementById("f").value.trim(); if(t) speak(t,d.lang); };
+  document.getElementById("s").onclick = () => {
+    const f = document.getElementById("f").value.trim(), b = document.getElementById("b").value.trim();
+    if (!f) return toast("Preencha a frente.");
+    if (k){ k.front=f; k.back=b; save(); back(); }
+    else { DB.cards.push(newCard(deckId,f,b)); save(); toast("Cartão adicionado");
+      document.getElementById("f").value=""; document.getElementById("b").value=""; document.getElementById("f").focus(); }
+  };
+  if (k){
+    document.getElementById("del").onclick = () => { if(confirm("Apagar este cartão?")){ DB.cards=DB.cards.filter(x=>x.id!==k.id); save(); back(); } };
+    document.getElementById("reset").onclick = () => { Object.assign(k,{isNew:true,due:0,interval:0,ease:2.5,reps:0,lapses:0}); save(); toast("Cartão reiniciado"); };
+  }
+},
+
+import(deckId){
+  $title.textContent = "Importar";
+  $app.innerHTML = `<div class="box">
+    <p class="muted" style="margin-top:0">Uma frase por linha, no formato <b>frente ; verso</b>. Também aceita tabulação
+    (arquivo .txt exportado do Anki como "Notas em texto simples") ou vírgula de CSV.</p>
+    <label>Baralho de destino</label>
+    <select id="dk">${DB.decks.map(d=>`<option value="${d.id}" ${d.id===deckId?"selected":""}>${esc(d.name)}</option>`).join("")}
+      <option value="__new">+ Criar novo baralho…</option></select>
+    <label>Colar lista</label>
+    <textarea id="txt" style="min-height:160px" placeholder="Good morning ; Bom dia&#10;See you later ; Até mais"></textarea>
+    <label>Ou escolher arquivo (.txt / .csv)</label><input type="file" id="file" accept=".txt,.csv,.tsv,text/plain">
+    <div class="row" style="margin-top:16px"><button class="primary" id="go">Importar</button></div>
+  </div>`;
+  document.getElementById("file").onchange = async e => {
+    const f = e.target.files[0]; if (f) document.getElementById("txt").value = await f.text();
+  };
+  document.getElementById("go").onclick = () => {
+    let did = document.getElementById("dk").value;
+    if (did === "__new"){
+      const name = prompt("Nome do novo baralho:"); if(!name) return;
+      const nd = {id:uid(),name:name.trim(),lang:"en-US"}; DB.decks.push(nd); did = nd.id;
+    }
+    const lines = document.getElementById("txt").value.split(/\r?\n/);
+    let n = 0;
+    for (let line of lines){
+      line = line.trim(); if (!line || line.startsWith("#")) continue;
+      let parts;
+      if (line.includes("\t")) parts = line.split("\t");
+      else if (line.includes(";")) parts = line.split(";");
+      else if (line.includes(",")) { const i=line.lastIndexOf(","); parts=[line.slice(0,i), line.slice(i+1)]; }
+      else parts = [line, ""];
+      const f = stripHtml(parts[0]).replace(/^"|"$/g,""), b = stripHtml(parts.slice(1).join(" ; ")).replace(/^"|"$/g,"");
+      if (f){ DB.cards.push(newCard(did,f,b)); n++; }
+    }
+    save(); toast(n + " cartões importados"); stack=[["home"],["deck",did]]; render();
+  };
+},
+
+study(deckId){
+  const d = deckById(deckId); if(!d) return back();
+  $title.textContent = d.name;
+  const nx = nextCard(deckId);
+  if (!nx){
+    $app.innerHTML = `<div class="box" style="text-align:center"><div style="font-size:48px">🎉</div>
+      <h2>Tudo feito por hoje!</h2><p class="muted">Volte amanhã para as próximas revisões.</p>
+      <button class="primary" id="h">Voltar ao início</button></div>`;
+    document.getElementById("h").onclick = () => { stack=[["home"]]; render(); };
+    return;
+  }
+  if (nx.wait){
+    const secs = Math.ceil(nx.wait/1000);
+    $app.innerHTML = `<div class="box" style="text-align:center"><h2>Pausa curta</h2>
+      <p class="muted">O próximo cartão em aprendizado volta em ${secs>60?Math.ceil(secs/60)+" min":secs+" s"}.</p>
+      <button class="primary" id="now">Estudar agora mesmo</button></div>`;
+    document.getElementById("now").onclick = () => { nx.card.due = Date.now(); go("study", deckId, true); };
+    return;
+  }
+  const card = nx, lang = d.lang;
+  const c = counts(deckId);
+  const listenMode = DB.settings.listenMode;
+  let revealed = false, result = null, tries = 0;
+
+  const wordsHtml = card.front.split(/(\s+)/).map(p=>/\s+/.test(p)?p:`<span class="w">${esc(p)}</span>`).join("");
+  $app.innerHTML = `
+    <div class="muted" style="text-align:center;margin-bottom:6px">
+      <span class="pill new">${c.nu} novos</span><span class="pill due">${c.due} revisar</span></div>
+    <div class="box">
+      <div class="front ${listenMode?"hidden":""}" id="front">${wordsHtml}</div>
+      ${listenMode?`<p class="muted" id="lm" style="text-align:center">Modo escuta: ouça e repita. <button class="small" id="showTxt">Ver texto</button></p>`:""}
+      <div class="tools">
+        <button id="play">🔊 Ouvir</button><button id="slow">🐢 Devagar</button>
+      </div>
+      <button class="mic" id="mic" aria-label="Falar">🎤</button>
+      <p class="muted" id="micHint" style="text-align:center;margin:0">Toque no microfone e leia em voz alta</p>
+      <div class="result hidden" id="res"></div>
+      <div class="back hidden" id="back">${esc(card.back)}</div>
+    </div>
+    <div class="row"><button id="reveal">Mostrar resposta</button></div>
+    <div class="grades hidden" id="grades"></div>
+    <p class="muted" style="text-align:center;margin-top:10px">Dica: toque numa palavra para ouvir só ela.</p>`;
+
+  const $ = id => document.getElementById(id);
+  $("play").onclick = () => speak(card.front, lang);
+  $("slow").onclick = () => speak(card.front, lang, 0.6);
+  $app.querySelectorAll("#front .w").forEach(w => w.onclick = () => speak(w.textContent, lang, 0.8));
+  if (listenMode) $("showTxt").onclick = () => { $("front").classList.remove("hidden"); $("lm").remove(); };
+  if (DB.settings.autoPlay || listenMode) setTimeout(()=>speak(card.front, lang), 250);
+
+  let listening = false;
+  $("mic").onclick = () => {
+    if (listening){ stopListen(); return; }
+    listen(lang, (alts, err) => {
+      if (err){
+        const msg = {
+          "not-allowed":"Permissão negada. Ative em Ajustes › Safari › Microfone e também em Ajustes › Siri (ou Ditado) do iPhone.",
+          "service-not-allowed":"O iPhone bloqueou o reconhecimento. Ative a Siri/Ditado em Ajustes › Geral › Teclado › Ativar Ditado.",
+          "no-speech":"Não ouvi nada. Tente falar logo após tocar no microfone.",
+          "network":"Sem internet: o reconhecimento de voz do iPhone precisa de conexão (ou de Ditado offline).",
+          "unsupported":"Este navegador não reconhece voz. Use o Safari do iPhone.",
+          "aborted":"Gravação interrompida."
+        }[err] || ("Erro no reconhecimento: " + err);
+        toast(msg, 4500); return;
+      }
+      tries++;
+      result = evaluate(card.front, alts, lang);
+      showResult();
+    }, on => {
+      listening = on; $("mic").classList.toggle("on", on); $("mic").textContent = on ? "⏹" : "🎤";
+      $("micHint").textContent = on ? "Ouvindo… fale agora" : (result ? "Toque para tentar de novo" : "Toque no microfone e leia em voz alta");
+    });
+  };
+
+  function showResult(){
+    const r = result, $r = $("res");
+    const color = r.score>=80 ? "var(--ok)" : r.score>=55 ? "var(--warn)" : "var(--bad)";
+    const parts = r.ops.filter(o=>o.t).map(o=>{
+      const cls = o.sim>=0.999 ? "w-ok" : o.sim>=0.6 ? "w-near" : o.h ? "w-bad" : "w-miss";
+      const tip = o.h && o.sim<0.999 ? ` title="ouvi: ${esc(o.h)}"` : "";
+      return `<span class="${cls}" data-w="${esc(o.t)}"${tip}>${esc(o.t)}</span>`;
+    }).join(" ");
+    const wrong = r.ops.filter(o=>o.t && o.sim<0.999).map(o=>o.h?`<b>${esc(o.t)}</b> → ouvi “${esc(o.h)}”`:`<b>${esc(o.t)}</b> → não ouvi`);
+    $r.innerHTML = `<div class="score" style="color:${color}">${r.score}%</div>
+      <div class="wres">${parts}</div>
+      <div class="heard">Entendi: “${esc(r.heard)}”</div>
+      ${wrong.length?`<div class="heard">${wrong.slice(0,6).join("<br>")}</div>`:""}
+      <div class="legend"><span class="w-ok">certo</span> <span class="w-near">quase</span> <span class="w-bad">errado</span> <span class="w-miss">faltou</span> · toque na palavra para ouvir</div>`;
+    $r.classList.remove("hidden");
+    $r.querySelectorAll("[data-w]").forEach(s=>s.onclick=()=>speak(s.dataset.w, lang, 0.75));
+    card.lastScore = r.score; save();
+    if (r.score >= 95 && navigator.vibrate) navigator.vibrate(30);
+    reveal();
+  }
+
+  function reveal(){
+    revealed = true;
+    $("back").classList.remove("hidden"); $("front").classList.remove("hidden");
+    const lm = $("lm"); if (lm) lm.remove();
+    $("reveal").parentElement.classList.add("hidden");
+    const sug = result ? suggestGrade(result.score) : 0;
+    const names = ["","De novo","Difícil","Bom","Fácil"];
+    $("grades").innerHTML = [1,2,3,4].map(g=>`<button class="g${g} ${g===sug?"sug":""}" data-g="${g}">${names[g]}<small>${preview(card,g).label}</small></button>`).join("");
+    $("grades").classList.remove("hidden");
+    $("grades").querySelectorAll("button").forEach(b=>b.onclick=()=>{ answer(card, +b.dataset.g); go("study", deckId, true); });
+    if (sug) $("micHint").textContent = "Sugestão pela pronúncia: " + names[sug] + " · toque no 🎤 para tentar de novo";
+  }
+  $("reveal").onclick = reveal;
+},
+
+settings(){
+  $title.textContent = "Ajustes";
+  const s = DB.settings;
+  const langsUsed = [...new Set(DB.decks.map(d=>d.lang))];
+  let voiceHtml = langsUsed.map(l=>{
+    const vs = voicesFor(l), cur = pickVoice(l);
+    return `<label>Voz para ${esc(langName(l))}</label><select data-vl="${l}">${
+      vs.length ? vs.map(v=>`<option value="${esc(v.voiceURI)}" ${cur&&v.voiceURI===cur.voiceURI?"selected":""}>${esc(v.name)} (${v.lang})</option>`).join("")
+      : `<option>Nenhuma voz encontrada</option>`}</select>`;
+  }).join("");
+  $app.innerHTML = `<div class="box">
+    <label>Velocidade da voz: <b id="rv">${s.rate.toFixed(2)}</b></label>
+    <input type="range" id="rate" min="0.5" max="1.2" step="0.05" value="${s.rate}">
+    ${voiceHtml}
+    <div class="row" style="margin-top:8px"><button class="small" id="testV">🔊 Testar voz</button></div>
+    <p class="muted">Vozes melhores e gratuitas: Ajustes do iPhone › Acessibilidade › Conteúdo Falado › Vozes › Inglês › baixe uma voz "Aprimorada" ou "Premium". Depois feche e reabra o app.</p>
+  </div>
+  <div class="box">
+    <label>Cartões novos por dia</label><input type="number" id="npd" min="1" max="200" value="${s.newPerDay}">
+    <label style="display:flex;gap:10px;align-items:center;color:var(--text)"><input type="checkbox" id="ap" style="width:auto" ${s.autoPlay?"checked":""}> Tocar o áudio automaticamente</label>
+    <label style="display:flex;gap:10px;align-items:center;color:var(--text)"><input type="checkbox" id="lm" style="width:auto" ${s.listenMode?"checked":""}> Modo escuta (esconde o texto: ouvir e repetir)</label>
+    <label style="display:flex;gap:10px;align-items:center;color:var(--text)"><input type="checkbox" id="st" style="width:auto" ${s.strict?"checked":""}> Avaliação mais rigorosa</label>
+  </div>
+  <div class="box">
+    <b>Backup</b>
+    <p class="muted">Os dados ficam só neste aparelho. Faça backup de vez em quando (salve no app Arquivos/iCloud).</p>
+    <div class="row"><button id="exp">Exportar backup</button><button id="imp">Restaurar backup</button></div>
+    <input type="file" id="impFile" accept=".json,application/json" class="hidden">
+  </div>
+  <p class="muted" style="text-align:center">FalaCards · gratuito · funciona offline (exceto o reconhecimento de voz, que pode precisar de internet)</p>`;
+  const $ = id => document.getElementById(id);
+  $("rate").oninput = e => { s.rate = +e.target.value; $("rv").textContent = s.rate.toFixed(2); save(); };
+  $app.querySelectorAll("[data-vl]").forEach(sel=>sel.onchange=()=>{ s.voices[sel.dataset.vl]=sel.value; save(); });
+  $("testV").onclick = () => { const l = langsUsed[0]||"en-US"; speak(l.startsWith("en")?"Hello! This is how I sound.":"Olá!", l); };
+  $("npd").onchange = e => { s.newPerDay = Math.max(1, +e.target.value||15); save(); };
+  $("ap").onchange = e => { s.autoPlay = e.target.checked; save(); };
+  $("lm").onchange = e => { s.listenMode = e.target.checked; save(); };
+  $("st").onchange = e => { s.strict = e.target.checked; save(); };
+  $("exp").onclick = async () => {
+    const blob = new Blob([JSON.stringify(DB)], {type:"application/json"});
+    const name = "falacards-backup-" + today() + ".json";
+    const file = new File([blob], name, {type:"application/json"});
+    if (navigator.canShare && navigator.canShare({files:[file]})) {
+      try { await navigator.share({files:[file], title:name}); return; } catch(e){ if (e.name==="AbortError") return; }
+    }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  };
+  $("imp").onclick = () => $("impFile").click();
+  $("impFile").onchange = async e => {
+    const f = e.target.files[0]; if(!f) return;
+    try { const d = JSON.parse(await f.text()); if(!d.decks||!d.cards) throw 0;
+      if (!confirm("Substituir todos os dados atuais pelo backup?")) return;
+      DB = d; DB.settings = Object.assign(load().settings, d.settings||{}); DB.log = d.log||{}; save(); toast("Backup restaurado"); stack=[["home"]]; render();
+    } catch(err){ toast("Arquivo de backup inválido."); }
+  };
+}
+};
+function langName(c){ const f = LANGS.find(l=>l[0]===c); return f ? f[1] : c; }
+function stripHtml(s){ const d=new DOMParser().parseFromString(s||"","text/html"); return (d.body.textContent||"").trim(); }
+
+stack = [["home"]]; render();
+document.addEventListener("visibilitychange", () => { if (!document.hidden && stack[stack.length-1][0]==="home") render(); });
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
