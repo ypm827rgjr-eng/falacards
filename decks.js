@@ -20,6 +20,10 @@ const BUNDLED_DECKS = [
     ["schedule","cronograma, agenda\nLet's check the schedule."],
     ["feasible","viável\nIs this plan feasible?"],
     ["resources","recursos\nWe don't have enough resources."],
+    ["assessment","avaliação\nThe assessment will be ready next week."],
+    ["achievements","conquistas, realizações\nLet's review your achievements this year."],
+    ["quarter","trimestre\nSales grew in the third quarter."],
+    ["identify","identificar\nWe need to identify the main risks."],
   ]},
 ];
 
