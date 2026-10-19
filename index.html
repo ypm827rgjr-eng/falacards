@@ -85,6 +85,45 @@ label{display:block;font-size:14px;color:var(--muted);margin:12px 0 4px}
 .legend span{padding:0 5px;border-radius:5px}
 .progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:10px}
 .progress div{height:100%;background:var(--primary);width:0}
+/* ---- Baby ---- */
+.btile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:22px;padding:16px 8px;
+  border:0;color:#1f2937;font-weight:700;min-height:130px}
+.btile .bt-ic{font-size:56px;line-height:1.1}
+.btile .bt-n{font-size:19px}
+.btile .bt-p{font-size:13px;font-weight:500;opacity:.75}
+.bt-home{width:100%;min-height:0;flex-direction:row;gap:12px;margin-bottom:12px;padding:14px 18px;
+  background:linear-gradient(120deg,#fde68a,#fbcfe8,#bfdbfe)}
+.bt-home .bt-ic{font-size:44px} .bt-home .bt-p{flex:1;text-align:left}
+.bgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bgrid .btile:nth-child(1){background:#fecaca}.bgrid .btile:nth-child(2){background:#bfdbfe}
+.bgrid .btile:nth-child(3){background:#fde68a}.bgrid .btile:nth-child(4){background:#bbf7d0}
+.bgrid .btile:nth-child(5){background:#fbcfe8}.bgrid .btile:nth-child(6){background:#ddd6fe}
+.bgrid .bt-all{grid-column:1/-1;min-height:90px;flex-direction:row;gap:12px;background:linear-gradient(90deg,#fecaca,#fde68a,#bbf7d0,#bfdbfe,#ddd6fe)}
+.bstage{display:flex;flex-direction:column;align-items:center;text-align:center;min-height:70vh}
+.bstars{font-size:26px;min-height:36px;letter-spacing:2px}
+.bpic{position:relative;width:min(72vw,300px);height:min(72vw,300px);display:flex;align-items:center;justify-content:center;
+  background:var(--card);border-radius:36px;box-shadow:0 6px 24px rgba(0,0,0,.08);overflow:visible;margin-top:6px}
+.bpic-emoji{font-size:min(46vw,190px);line-height:1}
+.bpic-svg{width:80%;height:80%}
+.bword{font-size:34px;font-weight:800;margin-top:14px;letter-spacing:.5px}
+.bstatus{font-size:44px;min-height:56px}
+.bstatus.ear{animation:pulse2 .9s infinite}
+.bstatus.talk{animation:wiggle .5s infinite}
+.bface{font-size:56px;min-height:64px}
+.bbig{width:110px;height:110px;border-radius:50%;font-size:48px;background:#22c55e;color:#fff;border:0;box-shadow:0 6px 18px rgba(34,197,94,.4)}
+.bctrl{display:flex;gap:14px;margin:14px 0}
+.bctrl button{font-size:28px;width:64px;height:64px;border-radius:50%;padding:0}
+#bmic.glow{background:var(--primary);color:#fff;animation:pulse2 .9s infinite}
+.pop{animation:pop .45s ease}
+.bounce{animation:bounce .6s ease infinite}
+.yay{animation:yay .8s ease}
+.conf{position:absolute;top:40%;font-size:30px;animation:conf 1.3s ease-out forwards;pointer-events:none}
+@keyframes pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes bounce{50%{transform:translateY(-10px)}}
+@keyframes yay{30%{transform:scale(1.15) rotate(-6deg)}60%{transform:scale(1.1) rotate(6deg)}100%{transform:none}}
+@keyframes pulse2{50%{transform:scale(1.18)}}
+@keyframes wiggle{50%{transform:rotate(12deg)}}
+@keyframes conf{0%{transform:translateY(0) scale(.5);opacity:1}100%{transform:translateY(-190px) scale(1.2) rotate(40deg);opacity:0}}
 </style>
 </head>
 <body>
@@ -365,6 +404,8 @@ home(){
   let h = "";
   if (!SR) h += `<div class="box" style="border-color:var(--warn)"><b>Reconhecimento de voz indisponível aqui.</b>
     <div class="muted">Abra no Safari do iPhone. Se instalou na Tela de Início e o microfone não funcionar, use pelo Safari mesmo.</div></div>`;
+  h += `<button class="btile bt-home" id="babyBtn"><span class="bt-ic">👶</span><span class="bt-n">Baby</span>
+    <span class="bt-p">ouvir, repetir e ganhar estrelas</span></button>`;
   for (const d of DB.decks){
     const c = counts(d.id);
     h += `<div class="box deck" data-deck="${d.id}">
@@ -382,6 +423,7 @@ home(){
     go("deck", el.dataset.deck);
   });
   document.getElementById("newDeck").onclick = () => go("deckEdit", null);
+  document.getElementById("babyBtn").onclick = () => go("baby");
   document.getElementById("importBtn").onclick = () => go("import", null);
 },
 
@@ -671,9 +713,10 @@ settings(){
 function langName(c){ const f = LANGS.find(l=>l[0]===c); return f ? f[1] : c; }
 function stripHtml(s){ const d=new DOMParser().parseFromString(s||"","text/html"); return (d.body.textContent||"").trim(); }
 
-stack = [["home"]]; render();
+window.addEventListener("load", () => { stack = [["home"]]; render(); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && stack[stack.length-1][0]==="home") render(); });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
+<script src="baby.js"></script>
 </body>
 </html>
