@@ -1,6 +1,6 @@
 // Cache para funcionar offline. Ao alterar o app, mude a versão abaixo.
-const CACHE = "falacards-v2";
-const FILES = ["./", "index.html", "baby.js", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
+const CACHE = "falacards-v3";
+const FILES = ["./", "index.html", "baby.js", "decks.js", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });

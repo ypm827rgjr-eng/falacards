@@ -713,10 +713,11 @@ settings(){
 function langName(c){ const f = LANGS.find(l=>l[0]===c); return f ? f[1] : c; }
 function stripHtml(s){ const d=new DOMParser().parseFromString(s||"","text/html"); return (d.body.textContent||"").trim(); }
 
-window.addEventListener("load", () => { stack = [["home"]]; render(); });
+window.addEventListener("load", () => { if (typeof syncBundled === "function") syncBundled(); stack = [["home"]]; render(); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && stack[stack.length-1][0]==="home") render(); });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 <script src="baby.js"></script>
+<script src="decks.js"></script>
 </body>
 </html>
