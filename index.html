@@ -124,6 +124,35 @@ label{display:block;font-size:14px;color:var(--muted);margin:12px 0 4px}
 @keyframes pulse2{50%{transform:scale(1.18)}}
 @keyframes wiggle{50%{transform:rotate(12deg)}}
 @keyframes conf{0%{transform:translateY(0) scale(.5);opacity:1}100%{transform:translateY(-190px) scale(1.2) rotate(40deg);opacity:0}}
+/* ---- Diálogos ---- */
+.bt-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.bt-row .bt-home{margin:0;flex-direction:column;gap:2px;padding:14px 8px}
+.bt-row .bt-home .bt-p{text-align:center;flex:none}
+.bt-dlg{background:linear-gradient(120deg,#bae6fd,#c7d2fe,#e9d5ff)}
+.dnum{width:30px;height:30px;border-radius:50%;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
+.bubble{border-radius:18px;padding:12px 14px;margin-bottom:12px;border:1px solid var(--line)}
+.bubble.q{background:#fdf2f8;margin-right:28px;border-top-left-radius:4px}
+.bubble.a{background:var(--card);margin-left:12px;border-top-right-radius:4px}
+@media (prefers-color-scheme: dark){ .bubble.q{background:#3b1d2f} }
+.bubble.talking{box-shadow:0 0 0 3px #f9a8d4}
+.who{font-size:13px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.who .ghost{padding:2px 6px}
+.qt{font-size:19px;font-weight:600}
+.sent{padding:8px 10px;border-radius:12px;margin:4px -6px;border:2px solid transparent;transition:background .2s}
+.sent .st{font-size:18px;line-height:1.45;cursor:pointer}
+.sent.playing{background:var(--primary-soft)}
+.sent.current{border-color:var(--primary);background:var(--primary-soft)}
+.sent.done .st{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.chips .tot{font-size:20px;margin-right:4px}
+.chip{font-size:13px;padding:3px 8px;border-radius:999px;background:var(--line)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.mid{background:var(--warn-soft);color:var(--warn)} .chip.bad{background:var(--bad-soft);color:var(--bad)}
+.wres.small{font-size:16px;line-height:1.8;margin-top:6px}
+.sbtn{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.dctl{display:flex;gap:8px;margin:4px 0 6px}.dctl button{flex:1}
+.sbar{display:grid;grid-template-columns:90px 1fr 36px;gap:8px;align-items:center;margin-top:8px;font-size:15px}
+.sbar div{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.sbar i{display:block;height:100%}
+.sbar b{text-align:right}
 </style>
 </head>
 <body>
@@ -294,23 +323,41 @@ const CONTR = {"i'm":"i am","you're":"you are","we're":"we are","they're":"they 
   "can't":"can not","cannot":"can not","won't":"will not","don't":"do not","doesn't":"does not","didn't":"did not",
   "isn't":"is not","aren't":"are not","wasn't":"was not","weren't":"were not","couldn't":"could not",
   "wouldn't":"would not","shouldn't":"should not","let's":"let us","gonna":"going to","wanna":"want to"};
-const NUMS = {"0":"zero","1":"one","2":"two","3":"three","4":"four","5":"five","6":"six","7":"seven","8":"eight",
-  "9":"nine","10":"ten","11":"eleven","12":"twelve","15":"fifteen","20":"twenty","30":"thirty","100":"hundred"};
+const ONES = ["zero","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve",
+  "thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen"];
+const TENS = ["","","twenty","thirty","forty","fifty","sixty","seventy","eighty","ninety"];
+function numWords(n){ // 0–100 por extenso; acima disso mantém os dígitos
+  if (n < 20) return [ONES[n]];
+  if (n < 100) return n % 10 ? [TENS[Math.floor(n/10)], ONES[n%10]] : [TENS[n/10]];
+  if (n === 100) return ["one","hundred"];
+  return [String(n)];
+}
 function norm(text, lang){
   let t = text.toLowerCase().replace(/[’`´]/g,"'").normalize("NFC");
   const en = lang.startsWith("en");
-  // separa pontuação, mantém apóstrofo dentro de palavra
+  if (en) t = t.replace(/&/g," and ");
+  // separa letras de números (sp50c → sp 50 c) e pontuação; mantém apóstrofo dentro de palavra
+  t = t.replace(/(\p{L})(\p{N})/gu,"$1 $2").replace(/(\p{N})(\p{L})/gu,"$1 $2");
   let words = t.replace(/[^\p{L}\p{N}'\s-]/gu," ").replace(/-/g," ").split(/\s+/).filter(Boolean);
   let out = [];
   for (let w of words){
     w = w.replace(/^'+|'+$/g,"");
     if (!w) continue;
     if (en && CONTR[w]) { out.push(...CONTR[w].split(" ")); continue; }
-    if (en && NUMS[w]) { out.push(NUMS[w]); continue; }
+    if (en && /^\d+$/.test(w)) { out.push(...numWords(+w)); continue; }
     if (en) w = w.replace(/'s$/,"s").replace(/'/g,"");
     out.push(w);
   }
-  return out;
+  // siglas soletradas viram uma palavra só (i p i → ipi; f p and a → fp and a)
+  const merged = [];
+  for (let i=0;i<out.length;){
+    if (out[i].length === 1 && /\p{L}/u.test(out[i]) && i+1 < out.length && out[i+1].length === 1 && /\p{L}/u.test(out[i+1])){
+      let j = i, s = "";
+      while (j < out.length && out[j].length === 1 && /\p{L}/u.test(out[j])) s += out[j++];
+      merged.push(s); i = j;
+    } else merged.push(out[i++]);
+  }
+  return merged;
 }
 function deaccent(s){ return s.normalize("NFD").replace(/\p{M}/gu,""); }
 function charSim(a,b){
@@ -381,13 +428,15 @@ function toast(msg, ms=2600){
   const t=document.createElement("div"); t.className="toast"; t.textContent=msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(), ms);
 }
+let onLeave = null; // limpeza da tela atual (microfone, áudio)
+function leave(){ if (onLeave){ const f = onLeave; onLeave = null; try{ f(); }catch(e){} } }
 function go(view, arg, replace){
-  stopListen(); if (synth) synth.cancel();
+  leave(); stopListen(); if (synth) synth.cancel();
   if (!replace && stack.length) {}
   if (replace) stack[stack.length-1] = [view,arg]; else stack.push([view,arg]);
   render();
 }
-function back(){ stopListen(); if (synth) synth.cancel(); stack.pop(); if(!stack.length) stack=[["home"]]; render(); }
+function back(){ leave(); stopListen(); if (synth) synth.cancel(); stack.pop(); if(!stack.length) stack=[["home"]]; render(); }
 $back.onclick = back;
 document.getElementById("settingsBtn").onclick = () => go("settings");
 function render(){
@@ -404,8 +453,10 @@ home(){
   let h = "";
   if (!SR) h += `<div class="box" style="border-color:var(--warn)"><b>Reconhecimento de voz indisponível aqui.</b>
     <div class="muted">Abra no Safari do iPhone. Se instalou na Tela de Início e o microfone não funcionar, use pelo Safari mesmo.</div></div>`;
-  h += `<button class="btile bt-home" id="babyBtn"><span class="bt-ic">👶</span><span class="bt-n">Baby</span>
-    <span class="bt-p">ouvir, repetir e ganhar estrelas</span></button>`;
+  h += `<div class="bt-row"><button class="btile bt-home" id="babyBtn"><span class="bt-ic">👶</span><span class="bt-n">Baby</span>
+    <span class="bt-p">ouvir, repetir e ganhar estrelas</span></button>
+    <button class="btile bt-home bt-dlg" id="dlgBtn"><span class="bt-ic">💬</span><span class="bt-n">Diálogos</span>
+    <span class="bt-p">pergunta e resposta, com nota</span></button></div>`;
   for (const d of DB.decks){
     const c = counts(d.id);
     h += `<div class="box deck" data-deck="${d.id}">
@@ -424,6 +475,7 @@ home(){
   });
   document.getElementById("newDeck").onclick = () => go("deckEdit", null);
   document.getElementById("babyBtn").onclick = () => go("baby");
+  document.getElementById("dlgBtn").onclick = () => go("dialogos");
   document.getElementById("importBtn").onclick = () => go("import", null);
 },
 
@@ -719,5 +771,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catc
 </script>
 <script src="baby.js"></script>
 <script src="decks.js"></script>
+<script src="dialogs-data.js"></script>
+<script src="dialogs.js"></script>
 </body>
 </html>
