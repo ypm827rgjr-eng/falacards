@@ -223,7 +223,8 @@ VIEWS.dialogo = function(id){
   if (!d) return back();
   const view = ++babyRun; // reaproveita o contador global para cancelar tarefas de telas antigas
   const alive = () => view === babyRun && stack[stack.length-1][0] === "dialogo";
-  $title.textContent = `Exercício ${pos+1} de ${all.length}`;
+  const inSet = d.set.dialogs.findIndex(x => x.id === id);
+  $title.textContent = `Exercício ${inSet+1} de ${d.set.dialogs.length}`;
   const res = d.a.map(() => null);
   onLeave = () => { stopRec(true); stopPlayer(); };
   let cur = 0, mode = "idle", recog = null, autoStop = null;
@@ -231,8 +232,9 @@ VIEWS.dialogo = function(id){
   $app.innerHTML = `
     <div class="bubble q"><div class="who">👩 Entrevistadora <button class="ghost small" id="pq">🔊</button></div>
       <div class="qt">${esc(d.q)}</div></div>
-    <div class="bubble a"><div class="who">👨 Você ${d.note?`<span class="muted" style="font-weight:400">· ${esc(d.note)}</span>`:""}</div>
+    <div class="bubble a"><div class="who">👨 Você</div>
       <div id="sents">${d.a.map((s,i) => `<div class="sent" data-i="${i}"><div class="st">${esc(s.t)}</div><div class="sr" id="sr${i}"></div></div>`).join("")}</div></div>
+    ${d.note ? `<div class="tip">💡 <b>Dica:</b> ${esc(d.note)}</div>` : ""}
     <div class="dctl">
       <button id="ex">▶ Ouvir exemplo</button>
       <button class="primary" id="pr">🎤 Praticar</button>

@@ -153,6 +153,7 @@ label{display:block;font-size:14px;color:var(--muted);margin:12px 0 4px}
 .sbar{display:grid;grid-template-columns:90px 1fr 36px;gap:8px;align-items:center;margin-top:8px;font-size:15px}
 .sbar div{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.sbar i{display:block;height:100%}
 .sbar b{text-align:right}
+.tip{background:var(--warn-soft);border-radius:14px;padding:10px 14px;margin:-4px 0 12px 12px;font-size:15px;line-height:1.45}
 </style>
 </head>
 <body>
@@ -335,7 +336,7 @@ function numWords(n){ // 0–100 por extenso; acima disso mantém os dígitos
 function norm(text, lang){
   let t = text.toLowerCase().replace(/[’`´]/g,"'").normalize("NFC");
   const en = lang.startsWith("en");
-  if (en) t = t.replace(/&/g," and ");
+  if (en) t = t.replace(/&/g," and ").replace(/\$\s?(\d+)/g,"$1 dollars").replace(/%/g," percent");
   // separa letras de números (sp50c → sp 50 c) e pontuação; mantém apóstrofo dentro de palavra
   t = t.replace(/(\p{L})(\p{N})/gu,"$1 $2").replace(/(\p{N})(\p{L})/gu,"$1 $2");
   let words = t.replace(/[^\p{L}\p{N}'\s-]/gu," ").replace(/-/g," ").split(/\s+/).filter(Boolean);
