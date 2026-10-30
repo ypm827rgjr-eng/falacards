@@ -154,6 +154,47 @@ label{display:block;font-size:14px;color:var(--muted);margin:12px 0 4px}
 .sbar div{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.sbar i{display:block;height:100%}
 .sbar b{text-align:right}
 .tip{background:var(--warn-soft);border-radius:14px;padding:10px 14px;margin:-4px 0 12px 12px;font-size:15px;line-height:1.45}
+/* ---- Cartas (estudo) ---- */
+.dhead{display:flex;justify-content:space-between;align-items:center;margin:4px 4px 8px}
+.deck.selmode{cursor:pointer}
+.deck .check{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:700;flex:none}
+.deck.sel{border-color:var(--primary)} .deck.sel .check{background:var(--primary);border-color:var(--primary)}
+.felt{margin:-16px;min-height:calc(100vh - 60px);padding:14px 16px 24px;color:#eafff0;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 35%,#1f8f4e 0%,#11743c 55%,#0a5a2d 100%)}
+.ftop{display:flex;justify-content:space-between;font-weight:600;font-size:15px;opacity:.9;min-height:22px}
+.pile{position:relative;height:min(118vw,470px);max-width:340px;margin:14px auto 0}
+.pcard{position:absolute;top:0;bottom:0;left:4%;right:4%;border-radius:16px;touch-action:none;user-select:none;-webkit-user-select:none}
+.pcard.down{background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.pcard.down::after{content:"";position:absolute;inset:7px;border-radius:10px;
+  background:repeating-linear-gradient(45deg,#1d4ed8 0 6px,#2563eb 6px 12px);box-shadow:inset 0 0 0 3px #93c5fd}
+.pcard.top{cursor:grab;z-index:2;perspective:1200px}
+.pcard.deal{animation:deal .42s cubic-bezier(.2,.9,.3,1.15)}
+@keyframes deal{0%{transform:translate(-55%,-40%) rotate(-14deg) scale(.6);opacity:.4}100%{transform:none;opacity:1}}
+.pinner{position:absolute;inset:0;transition:transform .5s cubic-bezier(.3,1.3,.5,1);transform-style:preserve-3d}
+.pcard.flipped .pinner{transform:rotateY(180deg)}
+.pface{position:absolute;inset:0;background:#fffdf7;border-radius:16px;backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  box-shadow:0 8px 22px rgba(0,0,0,.35);border:1px solid #d6d3c4;color:#1f2937;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:44px 22px;text-align:center;overflow:hidden}
+.pback{transform:rotateY(180deg)}
+.pc{position:absolute;font:700 20px/1.05 Georgia,serif;text-align:center}
+.pc.tl{top:10px;left:12px} .pc.br{bottom:10px;right:12px;transform:rotate(180deg)}
+.red{color:#c62828} .blk{color:#111827}
+.psuit{position:absolute;font-size:150px;opacity:.07;pointer-events:none}
+.pword{font:700 34px/1.2 -apple-system,system-ui,sans-serif;word-break:break-word;position:relative}
+.pmini{font-size:15px;color:#6b7280;margin-bottom:10px}
+.pdef{font-size:26px;font-weight:700;line-height:1.25}
+.pex{margin-top:16px;font-size:17px;font-style:italic;color:#4b5563;line-height:1.4}
+.stamp{position:absolute;top:26px;z-index:5;font:800 24px/1 -apple-system,sans-serif;padding:6px 12px;border:4px solid;border-radius:10px;
+  opacity:0;pointer-events:none;letter-spacing:1px;background:rgba(255,255,255,.88)}
+.stamp.yes{left:14px;color:#16a34a;transform:rotate(-14deg)} .stamp.no{right:14px;color:#dc2626;transform:rotate(14deg)}
+.fbtns{display:flex;justify-content:center;gap:22px;margin-top:22px}
+.fb{width:66px;height:66px;border-radius:50%;font-size:30px;padding:0;border:0;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.fb.no{color:#dc2626} .fb.yes{color:#16a34a} .fb.say{width:54px;height:54px;font-size:22px;align-self:center}
+.fhint{text-align:center;font-size:14px;opacity:.85;margin-top:14px}
+.fdone{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.fdone h2{margin:8px 0 4px} .fdone p{margin:0 0 16px;opacity:.9}
+.vcanvas{position:fixed;inset:0;z-index:30}
 </style>
 </head>
 <body>
@@ -217,34 +258,9 @@ if (navigator.storage && navigator.storage.persist) navigator.storage.persist().
 const today = () => new Date().toISOString().slice(0,10);
 function dayLog(){ const t=today(); DB.log[t] = DB.log[t] || {newDone:0,reviews:0}; return DB.log[t]; }
 
-/* ============ Repetição espaçada (estilo Anki / SM-2) ============ */
+/* ============ Fila de estudo ============ */
 function endOfToday(){ const d=new Date(); d.setHours(23,59,59,999); return d.getTime(); }
-function preview(card, g){ // devolve {interval(dias), due(ms), label}
-  const now = Date.now();
-  let iv = card.interval, ease = card.ease;
-  if (g === 1) return {due: now + 60*1000, interval: 0, ease: Math.max(1.3, ease-0.2), label:"1 min"};
-  if (card.isNew || iv === 0){
-    if (g === 2) return {due: now + 6*60*1000, interval: 0, ease, label:"6 min"};
-    if (g === 3) iv = 1;
-    if (g === 4) { iv = 4; ease += 0.15; }
-  } else {
-    if (g === 2){ iv = Math.max(1, iv*1.2); ease = Math.max(1.3, ease-0.15); }
-    if (g === 3){ iv = iv*ease; }
-    if (g === 4){ iv = iv*ease*1.3; ease += 0.15; }
-  }
-  iv = Math.max(1, Math.round(iv));
-  const d = new Date(); d.setHours(4,0,0,0); // vence às 4h do dia
-  return {due: d.getTime() + iv*DAY, interval: iv, ease, label: fmtDays(iv)};
-}
 function fmtDays(n){ if(n<30) return n+"d"; if(n<365) return (n/30).toFixed(1).replace(".0","")+" m"; return (n/365).toFixed(1)+" a"; }
-function answer(card, g){
-  const p = preview(card, g), log = dayLog();
-  if (card.isNew) log.newDone++; else log.reviews++;
-  if (g === 1 && !card.isNew && card.interval > 0) card.lapses++;
-  card.isNew = false; card.reps++;
-  card.interval = p.interval; card.ease = p.ease; card.due = p.due;
-  save();
-}
 function counts(deckId){
   const now = Date.now(), cs = DB.cards.filter(c=>c.deckId===deckId);
   const newLeft = Math.max(0, DB.settings.newPerDay - (dayLog().newDone||0));
@@ -254,22 +270,6 @@ function counts(deckId){
     total: cs.length
   };
 }
-function nextCard(deckId){
-  const now = Date.now();
-  const cs = DB.cards.filter(c=>c.deckId===deckId);
-  const learning = cs.filter(c=>!c.isNew && c.interval===0 && c.due<=now).sort((a,b)=>a.due-b.due);
-  if (learning.length) return learning[0];
-  const due = cs.filter(c=>!c.isNew && c.interval>0 && c.due<=endOfToday()).sort((a,b)=>a.due-b.due);
-  if (due.length) return due[0];
-  if ((dayLog().newDone||0) < DB.settings.newPerDay){
-    const nu = cs.filter(c=>c.isNew).sort((a,b)=>a.created-b.created);
-    if (nu.length) return nu[0];
-  }
-  const soon = cs.filter(c=>!c.isNew && c.interval===0).sort((a,b)=>a.due-b.due);
-  if (soon.length) return {wait: soon[0].due - now, card: soon[0]};
-  return null;
-}
-
 /* ============ Voz (texto → fala) ============ */
 const synth = window.speechSynthesis;
 let voices = [];
@@ -414,10 +414,6 @@ function evaluate(targetText, alts, lang){
   }
   return best;
 }
-function suggestGrade(score){
-  const s = DB.settings.strict ? score - 8 : score;
-  return s >= 95 ? 4 : s >= 80 ? 3 : s >= 55 ? 2 : 1;
-}
 
 /* ============ UI ============ */
 const $app = document.getElementById("app");
@@ -430,14 +426,14 @@ function toast(msg, ms=2600){
   document.body.appendChild(t); setTimeout(()=>t.remove(), ms);
 }
 let onLeave = null; // limpeza da tela atual (microfone, áudio)
-function leave(){ if (onLeave){ const f = onLeave; onLeave = null; try{ f(); }catch(e){} } }
+function leave(next){ if (onLeave){ const f = onLeave; onLeave = null; try{ f(next); }catch(e){} } }
 function go(view, arg, replace){
-  leave(); stopListen(); if (synth) synth.cancel();
+  leave(view); stopListen(); if (synth) synth.cancel();
   if (!replace && stack.length) {}
   if (replace) stack[stack.length-1] = [view,arg]; else stack.push([view,arg]);
   render();
 }
-function back(){ leave(); stopListen(); if (synth) synth.cancel(); stack.pop(); if(!stack.length) stack=[["home"]]; render(); }
+function back(){ leave(stack.length > 1 ? stack[stack.length-2][0] : "home"); stopListen(); if (synth) synth.cancel(); stack.pop(); if(!stack.length) stack=[["home"]]; render(); }
 $back.onclick = back;
 document.getElementById("settingsBtn").onclick = () => go("settings");
 function render(){
@@ -448,6 +444,7 @@ function render(){
 }
 const deckById = id => DB.decks.find(d=>d.id===id);
 
+let selMode = false; const selected = new Set(); // seleção de baralhos na tela inicial
 const VIEWS = {
 home(){
   $title.textContent = "FalaCards";
@@ -458,26 +455,45 @@ home(){
     <span class="bt-p">ouvir, repetir e ganhar estrelas</span></button>
     <button class="btile bt-home bt-dlg" id="dlgBtn"><span class="bt-ic">💬</span><span class="bt-n">Diálogos</span>
     <span class="bt-p">pergunta e resposta, com nota</span></button></div>`;
+  if (DB.decks.length) h += `<div class="dhead"><b>Baralhos</b>${selMode
+      ? `<button class="ghost small" id="selCancel">Cancelar</button>`
+      : `<button class="ghost small" id="selOn">Selecionar</button>`}</div>`;
   for (const d of DB.decks){
-    const c = counts(d.id);
-    h += `<div class="box deck" data-deck="${d.id}">
+    const c = counts(d.id), on = selected.has(d.id);
+    h += `<div class="box deck ${selMode?"selmode":""} ${on?"sel":""}" data-deck="${d.id}">
+      ${selMode ? `<span class="check">${on?"✓":""}</span>` : ""}
       <div class="info"><div class="name">${esc(d.name)}</div>
       <div class="muted">${esc(langName(d.lang))} · ${c.total} cartões</div>
       <div style="margin-top:6px"><span class="pill new">${c.nu} novos</span><span class="pill due">${c.due} revisar</span></div></div>
-      <button class="primary small" data-study="${d.id}" ${c.nu+c.due? "":"disabled"}>Estudar</button></div>`;
+      ${selMode ? "" : `<button class="primary small" data-study="${d.id}" ${c.nu+c.due? "":"disabled"}>Estudar</button>`}</div>`;
   }
-  h += `<div class="row"><button id="newDeck">+ Novo baralho</button><button id="importBtn">Importar</button></div>`;
+  if (selMode) h += `<div class="row"><button id="selDel" style="color:var(--bad)" ${selected.size?"":"disabled"}>🗑 Excluir selecionados (${selected.size})</button></div>`;
+  else h += `<div class="row"><button id="newDeck">+ Novo baralho</button><button id="importBtn">Importar</button></div>`;
   const l = dayLog();
   h += `<p class="muted" style="text-align:center;margin-top:18px">Hoje: ${l.newDone} novos · ${l.reviews} revisões</p>`;
   $app.innerHTML = h;
   $app.querySelectorAll("[data-deck]").forEach(el=>el.onclick=e=>{
+    const id = el.dataset.deck;
+    if (selMode){ selected.has(id) ? selected.delete(id) : selected.add(id); return render(); }
     if (e.target.dataset.study) return go("study", e.target.dataset.study);
-    go("deck", el.dataset.deck);
+    go("deck", id);
   });
-  document.getElementById("newDeck").onclick = () => go("deckEdit", null);
-  document.getElementById("babyBtn").onclick = () => go("baby");
-  document.getElementById("dlgBtn").onclick = () => go("dialogos");
-  document.getElementById("importBtn").onclick = () => go("import", null);
+  const $ = id => document.getElementById(id);
+  if ($("selOn")) $("selOn").onclick = () => { selMode = true; selected.clear(); render(); };
+  if ($("selCancel")) $("selCancel").onclick = () => { selMode = false; selected.clear(); render(); };
+  if ($("selDel")) $("selDel").onclick = () => {
+    const n = selected.size; if (!n) return;
+    const names = DB.decks.filter(d => selected.has(d.id)).map(d => "• " + d.name).join("\n");
+    if (!confirm(`Excluir ${n} baralho${n>1?"s":""} e todos os cartões?\n\n${names}`)) return;
+    DB.decks = DB.decks.filter(d => !selected.has(d.id));
+    DB.cards = DB.cards.filter(c => !selected.has(c.deckId));
+    save(); toast(`${n} baralho${n>1?"s":""} excluído${n>1?"s":""}`);
+    selMode = false; selected.clear(); render();
+  };
+  if ($("newDeck")) $("newDeck").onclick = () => go("deckEdit", null);
+  $("babyBtn").onclick = () => go("baby");
+  $("dlgBtn").onclick = () => go("dialogos");
+  if ($("importBtn")) $("importBtn").onclick = () => go("import", null);
 },
 
 deck(id){
@@ -493,10 +509,11 @@ deck(id){
   h += `<div class="box">`;
   if (!cs.length) h += `<p class="muted">Nenhum cartão ainda.</p>`;
   for (const k of cs){
-    const st = k.isNew ? "novo" : (k.interval ? "em " + fmtDays(Math.max(0,Math.ceil((k.due-Date.now())/DAY))) : "aprendendo");
+    const days = Math.ceil((k.due - endOfToday()) / DAY);
+    const st = k.isNew ? "novo" : days <= 0 ? "hoje" : days === 1 ? "amanhã" : "em " + fmtDays(days);
     h += `<div class="cardline"><button class="ghost" data-say="${k.id}" aria-label="Ouvir">🔊</button>
       <div class="t" data-edit="${k.id}"><div><b>${esc(k.front)}</b></div><div class="muted">${esc(k.back)}</div></div>
-      <div class="muted" style="text-align:right;font-size:12px">${st}${k.lastScore!=null?"<br>"+k.lastScore+"%":""}</div></div>`;
+      <div class="muted" style="text-align:right;font-size:12px">${st}</div></div>`;
   }
   h += `</div>`;
   $app.innerHTML = h;
@@ -596,116 +613,6 @@ import(deckId){
   };
 },
 
-study(deckId){
-  const d = deckById(deckId); if(!d) return back();
-  $title.textContent = d.name;
-  const nx = nextCard(deckId);
-  if (!nx){
-    $app.innerHTML = `<div class="box" style="text-align:center"><div style="font-size:48px">🎉</div>
-      <h2>Tudo feito por hoje!</h2><p class="muted">Volte amanhã para as próximas revisões.</p>
-      <button class="primary" id="h">Voltar ao início</button></div>`;
-    document.getElementById("h").onclick = () => { stack=[["home"]]; render(); };
-    return;
-  }
-  if (nx.wait){
-    const secs = Math.ceil(nx.wait/1000);
-    $app.innerHTML = `<div class="box" style="text-align:center"><h2>Pausa curta</h2>
-      <p class="muted">O próximo cartão em aprendizado volta em ${secs>60?Math.ceil(secs/60)+" min":secs+" s"}.</p>
-      <button class="primary" id="now">Estudar agora mesmo</button></div>`;
-    document.getElementById("now").onclick = () => { nx.card.due = Date.now(); go("study", deckId, true); };
-    return;
-  }
-  const card = nx, lang = d.lang;
-  const c = counts(deckId);
-  const listenMode = DB.settings.listenMode;
-  let revealed = false, result = null, tries = 0;
-
-  const wordsHtml = card.front.split(/(\s+)/).map(p=>/\s+/.test(p)?p:`<span class="w">${esc(p)}</span>`).join("");
-  $app.innerHTML = `
-    <div class="muted" style="text-align:center;margin-bottom:6px">
-      <span class="pill new">${c.nu} novos</span><span class="pill due">${c.due} revisar</span></div>
-    <div class="box">
-      <div class="front ${listenMode?"hidden":""}" id="front">${wordsHtml}</div>
-      ${listenMode?`<p class="muted" id="lm" style="text-align:center">Modo escuta: ouça e repita. <button class="small" id="showTxt">Ver texto</button></p>`:""}
-      <div class="tools">
-        <button id="play">🔊 Ouvir</button><button id="slow">🐢 Devagar</button>
-      </div>
-      <button class="mic" id="mic" aria-label="Falar">🎤</button>
-      <p class="muted" id="micHint" style="text-align:center;margin:0">Toque no microfone e leia em voz alta</p>
-      <div class="result hidden" id="res"></div>
-      <div class="back hidden" id="back">${esc(card.back)}</div>
-    </div>
-    <div class="row"><button id="reveal">Mostrar resposta</button></div>
-    <div class="grades hidden" id="grades"></div>
-    <p class="muted" style="text-align:center;margin-top:10px">Dica: toque numa palavra para ouvir só ela.</p>`;
-
-  const $ = id => document.getElementById(id);
-  $("play").onclick = () => speak(card.front, lang);
-  $("slow").onclick = () => speak(card.front, lang, 0.6);
-  $app.querySelectorAll("#front .w").forEach(w => w.onclick = () => speak(w.textContent, lang, 0.8));
-  if (listenMode) $("showTxt").onclick = () => { $("front").classList.remove("hidden"); $("lm").remove(); };
-  if (DB.settings.autoPlay || listenMode) setTimeout(()=>speak(card.front, lang), 250);
-
-  let listening = false;
-  $("mic").onclick = () => {
-    if (listening){ stopListen(); return; }
-    listen(lang, (alts, err) => {
-      if (err){
-        const msg = {
-          "not-allowed":"Permissão negada. Ative em Ajustes › Safari › Microfone e também em Ajustes › Siri (ou Ditado) do iPhone.",
-          "service-not-allowed":"O iPhone bloqueou o reconhecimento. Ative a Siri/Ditado em Ajustes › Geral › Teclado › Ativar Ditado.",
-          "no-speech":"Não ouvi nada. Tente falar logo após tocar no microfone.",
-          "network":"Sem internet: o reconhecimento de voz do iPhone precisa de conexão (ou de Ditado offline).",
-          "unsupported":"Este navegador não reconhece voz. Use o Safari do iPhone.",
-          "aborted":"Gravação interrompida."
-        }[err] || ("Erro no reconhecimento: " + err);
-        toast(msg, 4500); return;
-      }
-      tries++;
-      result = evaluate(card.front, alts, lang);
-      showResult();
-    }, on => {
-      listening = on; $("mic").classList.toggle("on", on); $("mic").textContent = on ? "⏹" : "🎤";
-      $("micHint").textContent = on ? "Ouvindo… fale agora" : (result ? "Toque para tentar de novo" : "Toque no microfone e leia em voz alta");
-    });
-  };
-
-  function showResult(){
-    const r = result, $r = $("res");
-    const color = r.score>=80 ? "var(--ok)" : r.score>=55 ? "var(--warn)" : "var(--bad)";
-    const parts = r.ops.filter(o=>o.t).map(o=>{
-      const cls = o.sim>=0.999 ? "w-ok" : o.sim>=0.6 ? "w-near" : o.h ? "w-bad" : "w-miss";
-      const tip = o.h && o.sim<0.999 ? ` title="ouvi: ${esc(o.h)}"` : "";
-      return `<span class="${cls}" data-w="${esc(o.t)}"${tip}>${esc(o.t)}</span>`;
-    }).join(" ");
-    const wrong = r.ops.filter(o=>o.t && o.sim<0.999).map(o=>o.h?`<b>${esc(o.t)}</b> → ouvi “${esc(o.h)}”`:`<b>${esc(o.t)}</b> → não ouvi`);
-    $r.innerHTML = `<div class="score" style="color:${color}">${r.score}%</div>
-      <div class="wres">${parts}</div>
-      <div class="heard">Entendi: “${esc(r.heard)}”</div>
-      ${wrong.length?`<div class="heard">${wrong.slice(0,6).join("<br>")}</div>`:""}
-      <div class="legend"><span class="w-ok">certo</span> <span class="w-near">quase</span> <span class="w-bad">errado</span> <span class="w-miss">faltou</span> · toque na palavra para ouvir</div>`;
-    $r.classList.remove("hidden");
-    $r.querySelectorAll("[data-w]").forEach(s=>s.onclick=()=>speak(s.dataset.w, lang, 0.75));
-    card.lastScore = r.score; save();
-    if (r.score >= 95 && navigator.vibrate) navigator.vibrate(30);
-    reveal();
-  }
-
-  function reveal(){
-    revealed = true;
-    $("back").classList.remove("hidden"); $("front").classList.remove("hidden");
-    const lm = $("lm"); if (lm) lm.remove();
-    $("reveal").parentElement.classList.add("hidden");
-    const sug = result ? suggestGrade(result.score) : 0;
-    const names = ["","De novo","Difícil","Bom","Fácil"];
-    $("grades").innerHTML = [1,2,3,4].map(g=>`<button class="g${g} ${g===sug?"sug":""}" data-g="${g}">${names[g]}<small>${preview(card,g).label}</small></button>`).join("");
-    $("grades").classList.remove("hidden");
-    $("grades").querySelectorAll("button").forEach(b=>b.onclick=()=>{ answer(card, +b.dataset.g); go("study", deckId, true); });
-    if (sug) $("micHint").textContent = "Sugestão pela pronúncia: " + names[sug] + " · toque no 🎤 para tentar de novo";
-  }
-  $("reveal").onclick = reveal;
-},
-
 settings(){
   $title.textContent = "Ajustes";
   const s = DB.settings;
@@ -725,9 +632,6 @@ settings(){
   </div>
   <div class="box">
     <label>Cartões novos por dia</label><input type="number" id="npd" min="1" max="200" value="${s.newPerDay}">
-    <label style="display:flex;gap:10px;align-items:center;color:var(--text)"><input type="checkbox" id="ap" style="width:auto" ${s.autoPlay?"checked":""}> Tocar o áudio automaticamente</label>
-    <label style="display:flex;gap:10px;align-items:center;color:var(--text)"><input type="checkbox" id="lm" style="width:auto" ${s.listenMode?"checked":""}> Modo escuta (esconde o texto: ouvir e repetir)</label>
-    <label style="display:flex;gap:10px;align-items:center;color:var(--text)"><input type="checkbox" id="st" style="width:auto" ${s.strict?"checked":""}> Avaliação mais rigorosa</label>
   </div>
   <div class="box">
     <b>Backup</b>
@@ -741,9 +645,6 @@ settings(){
   $app.querySelectorAll("[data-vl]").forEach(sel=>sel.onchange=()=>{ s.voices[sel.dataset.vl]=sel.value; save(); });
   $("testV").onclick = () => { const l = langsUsed[0]||"en-US"; speak(l.startsWith("en")?"Hello! This is how I sound.":"Olá!", l); };
   $("npd").onchange = e => { s.newPerDay = Math.max(1, +e.target.value||15); save(); };
-  $("ap").onchange = e => { s.autoPlay = e.target.checked; save(); };
-  $("lm").onchange = e => { s.listenMode = e.target.checked; save(); };
-  $("st").onchange = e => { s.strict = e.target.checked; save(); };
   $("exp").onclick = async () => {
     const blob = new Blob([JSON.stringify(DB)], {type:"application/json"});
     const name = "falacards-backup-" + today() + ".json";
@@ -772,6 +673,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catc
 </script>
 <script src="baby.js"></script>
 <script src="decks.js"></script>
+<script src="cards.js"></script>
 <script src="dialogs-data.js"></script>
 <script src="dialogs.js"></script>
 </body>

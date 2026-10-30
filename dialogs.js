@@ -6,7 +6,7 @@
    as duas últimas comparando a sua gravação com a do modelo. */
 
 const DLG_LANG = "en-US";
-const DLG = {ctx:null, refs:{}, player:null, cap:null};
+const DLG = {ctx:null, refs:{}, player:null, cap:null, stream:null, src:null};
 
 function dlgStats(){ DB.dlgStats = DB.dlgStats || {}; return DB.dlgStats; }
 function dlgAudioOn(){ return DB.settings.dlgAudio !== false; }
@@ -149,48 +149,139 @@ function fluencyScore(ref, usr){
   return {score: Math.round(Math.max(0, Math.min(100, s))), ratio, extra, long};
 }
 
-/* ---------- captura do microfone (para fluência e entonação) ---------- */
-async function startCapture(onLevel){
+/* ---------- microfone: aberto uma vez e mantido enquanto estiver em Diálogos ---------- */
+async function ensureMic(){
   const ctx = audioCtx(); if (!ctx || !navigator.mediaDevices) throw new Error("no-audio");
-  const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:false, autoGainControl:false}});
-  const src = ctx.createMediaStreamSource(stream);
-  const proc = ctx.createScriptProcessor(4096, 1, 1);
-  const chunks = [];
+  if (DLG.stream && DLG.stream.getAudioTracks().some(t => t.readyState === "live")) return;
+  DLG.stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:false, autoGainControl:false}});
+  DLG.src = ctx.createMediaStreamSource(DLG.stream);
+}
+function releaseMic(){
+  stopCapture();
+  if (DLG.stream){ DLG.stream.getTracks().forEach(t => t.stop()); }
+  DLG.stream = null; DLG.src = null;
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden) releaseMic(); });
+async function startCapture(onLevel){
+  await ensureMic();
+  const ctx = audioCtx();
+  const proc = ctx.createScriptProcessor(4096, 1, 1), chunks = [];
   proc.onaudioprocess = e => {
     const d = new Float32Array(e.inputBuffer.getChannelData(0)); chunks.push(d);
     let s = 0; for (let i=0;i<d.length;i++) s += d[i]*d[i];
     if (onLevel) onLevel(Math.sqrt(s/d.length));
   };
-  src.connect(proc); proc.connect(ctx.destination);
-  DLG.cap = {stream, src, proc, chunks, sr: ctx.sampleRate};
+  DLG.src.connect(proc); proc.connect(ctx.destination);
+  DLG.cap = {proc, chunks, sr: ctx.sampleRate};
 }
 function stopCapture(){
   const c = DLG.cap; if (!c) return null; DLG.cap = null;
-  try{ c.src.disconnect(); c.proc.disconnect(); }catch(e){}
-  c.stream.getTracks().forEach(t => t.stop());
+  try{ DLG.src && DLG.src.disconnect(c.proc); c.proc.disconnect(); }catch(e){}
   const n = c.chunks.reduce((s,a)=>s+a.length,0), out = new Float32Array(n);
   let o = 0; for (const a of c.chunks){ out.set(a, o); o += a.length; }
   return {samples: out, sr: c.sr};
 }
 
-/* ---------- reconhecimento contínuo (frases longas) ---------- */
-function listenLong(onUpdate, onEnd){
-  if (!SR){ onEnd(null, "unsupported"); return null; }
-  const r = new SR();
-  r.lang = DLG_LANG; r.continuous = true; r.interimResults = true; r.maxAlternatives = 3;
-  let joined = "", longest = "", ended = false, err = null;
-  r.onresult = e => {
-    const parts = [];
-    for (let i=0;i<e.results.length;i++){ const t = e.results[i][0].transcript.trim(); parts.push(t); if (t.length > longest.length) longest = t; }
-    joined = parts.join(" ");
-    onUpdate(joined);
+/* ---------- reconhecimento da resposta inteira (reinicia sozinho nas pausas) ---------- */
+function longRecognizer(onText){
+  let active = true, finished = false, r = null, err = null, resolve;
+  const segs = []; let cur = {joined:"", longest:""};
+  const done = new Promise(res => resolve = res);
+  const text = () => [...segs.map(s => s.joined), cur.joined].filter(Boolean).join(" ");
+  function pushSeg(){ if (cur.joined || cur.longest) segs.push(cur); cur = {joined:"", longest:""}; }
+  function finish(){
+    if (finished) return; finished = true;
+    const a = segs.map(s => s.joined).join(" ").trim(), b = segs.map(s => s.longest).join(" ").trim();
+    const alts = [a, b].filter((t,i,arr) => t && arr.indexOf(t) === i).map(t => ({text:t, conf:1}));
+    resolve(alts.length ? {alts} : {err: err || "no-speech"});
+  }
+  function startOne(){
+    r = new SR();
+    r.lang = DLG_LANG; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+    r.onresult = e => {
+      const parts = [];
+      for (let i=0;i<e.results.length;i++){ const t = e.results[i][0].transcript.trim(); parts.push(t);
+        if (t.length > cur.longest.length) cur.longest = t; }
+      cur.joined = parts.join(" ");
+      onText(text());
+    };
+    r.onerror = e => { if (e.error !== "no-speech" && e.error !== "aborted") err = e.error; };
+    r.onend = () => {
+      pushSeg();
+      if (active && !err){ try { startOne(); return; } catch(e){} }
+      finish();
+    };
+    r.start();
+  }
+  if (!SR) resolve({err:"unsupported"});
+  else try { startOne(); } catch(e){ resolve({err:"start-failed"}); finished = true; }
+  return {
+    done, text,
+    stop(){ active = false; try{ r && r.stop(); }catch(e){} setTimeout(() => { pushSeg(); finish(); }, 2500); },
+    abort(){ active = false; if (r){ r.onend = null; r.onresult = null; try{ r.abort(); }catch(e){} } finished = true; resolve({err:"aborted"}); }
   };
-  r.onerror = e => { err = e.error; };
-  r.onend = () => { if (ended) return; ended = true;
-    const alts = [joined, longest].filter((t,i,a) => t && a.indexOf(t) === i).map(t => ({text:t, conf:1}));
-    onEnd(alts.length ? alts : null, alts.length ? null : (err || "no-speech")); };
-  try { r.start(); } catch(e){ ended = true; onEnd(null, "start-failed"); return null; }
-  return r;
+}
+
+/* ---------- divide a gravação inteira em frases, usando as pausas ---------- */
+function splitBySentences(raw, sr, refDurs){
+  const x = resample(raw, sr);
+  const nF = Math.max(0, Math.floor((x.length - AN_WIN) / AN_HOP));
+  const n = refDurs.length;
+  if (nF < 10) return refDurs.map(() => null);
+  const rms = new Float32Array(nF);
+  for (let f=0; f<nF; f++){ let s = 0, o = f*AN_HOP; for (let i=0;i<AN_WIN;i++){ const v = x[o+i]; s += v*v; } rms[f] = Math.sqrt(s/AN_WIN); }
+  const thr = Math.max(pct(rms,0.15)*2.5, pct(rms,0.95)*0.12, 0.004);
+  const sp = Array.from(rms, v => v > thr);
+  const start = sp.indexOf(true), end = sp.lastIndexOf(true);
+  if (start < 0) return refDurs.map(() => null);
+  const gaps = [];
+  for (let f=start; f<=end; f++) if (!sp[f]){ let j = f; while (j<=end && !sp[j]) j++;
+    if (j - f >= 10) gaps.push({mid: (f+j)/2, len: j-f}); f = j; }
+  const total = refDurs.reduce((a,b)=>a+b,0) || 1;
+  const cuts = []; let cum = 0, minF = start;
+  for (let k=0; k<n-1; k++){
+    cum += refDurs[k];
+    const exp = start + (end-start)*cum/total;
+    let best = null, bestCost = Infinity;
+    for (const g of gaps){ if (g.used || g.mid <= minF) continue;
+      const cost = Math.abs(g.mid - exp) - g.len*1.5;
+      if (Math.abs(g.mid - exp) < (end-start)*0.35 && cost < bestCost){ best = g; bestCost = cost; } }
+    let cut = exp;
+    if (best){ best.used = true; cut = best.mid; }
+    cut = Math.max(cut, minF + 1); cuts.push(cut); minF = cut;
+  }
+  const bounds = [start, ...cuts, end + 1];
+  const segs = [];
+  for (let k=0; k<n; k++){
+    const a = Math.floor(bounds[k]) * AN_HOP, b = Math.min(x.length, Math.ceil(bounds[k+1]) * AN_HOP + AN_WIN);
+    const piece = x.slice(a, b);
+    segs.push(piece.length > AN_WIN*6 ? {samples: piece, an: analyzeSpeech(piece, AN_SR)} : null);
+  }
+  return segs;
+}
+
+/* ---------- pronúncia: compara o texto inteiro e divide a nota por frase ---------- */
+function evaluateAnswer(sentences, alts){
+  const tw = []; sentences.forEach((s, i) => norm(s.t, DLG_LANG).forEach(w => tw.push({w, i})));
+  let best = null;
+  for (const a of alts){
+    const heard = norm(a.text, DLG_LANG);
+    const ops = align(tw.map(x => x.w), heard);
+    const per = sentences.map(() => ({ops: [], credit: 0, words: 0, extra: 0, heard: []}));
+    let ti = 0, lastS = 0;
+    for (const o of ops){
+      if (o.t != null){
+        const si = tw[ti++].i; lastS = si;
+        const c = o.sim >= 0.999 ? 1 : o.sim >= 0.9 ? 0.9 : o.sim >= 0.6 ? o.sim*0.6 : 0;
+        per[si].ops.push(o); per[si].credit += c; per[si].words++;
+        if (o.h) per[si].heard.push(o.h);
+      } else { per[lastS].extra++; per[lastS].heard.push(o.h); }
+    }
+    per.forEach(p => { p.score = p.words ? Math.max(0, Math.round(p.credit/p.words*100 - Math.min(15, p.extra*5))) : 0; });
+    const total = per.reduce((s,p) => s + p.score*p.words, 0) / Math.max(1, tw.length);
+    if (!best || total > best.total) best = {total, per, heard: a.text};
+  }
+  return best;
 }
 
 /* ---------- telas ---------- */
@@ -216,6 +307,7 @@ VIEWS.dialogos = function(){
   $app.innerHTML = h;
   $app.querySelectorAll("[data-dlg]").forEach(el => el.onclick = () => go("dialogo", el.dataset.dlg));
   document.getElementById("dau").onchange = e => { DB.settings.dlgAudio = e.target.checked; save(); };
+  onLeave = next => { if (next !== "dialogo") releaseMic(); };
 };
 
 VIEWS.dialogo = function(id){
@@ -225,9 +317,9 @@ VIEWS.dialogo = function(id){
   const alive = () => view === babyRun && stack[stack.length-1][0] === "dialogo";
   const inSet = d.set.dialogs.findIndex(x => x.id === id);
   $title.textContent = `Exercício ${inSet+1} de ${d.set.dialogs.length}`;
-  const res = d.a.map(() => null);
-  onLeave = () => { stopRec(true); stopPlayer(); };
-  let cur = 0, mode = "idle", recog = null, autoStop = null;
+  let mode = "idle", recog = null, autoStop = null;
+  const cum = []; d.a.reduce((s, x, i) => (cum[i] = s + norm(x.t, DLG_LANG).length), 0);
+  onLeave = next => { stopRec(true); stopPlayer(); if (next !== "dialogo" && next !== "dialogos") releaseMic(); };
 
   $app.innerHTML = `
     <div class="bubble q"><div class="who">👩 Entrevistadora <button class="ghost small" id="pq">🔊</button></div>
@@ -239,8 +331,8 @@ VIEWS.dialogo = function(id){
       <button id="ex">▶ Ouvir exemplo</button>
       <button class="primary" id="pr">🎤 Praticar</button>
     </div>
-    <button class="mic hidden" id="dmic" aria-label="Falar">🎤</button>
-    <p class="muted" id="dhint" style="text-align:center;margin:4px 0 0">Primeiro ouça o exemplo. Depois toque em Praticar e fale a resposta frase por frase.</p>
+    <button class="mic hidden" id="dmic" aria-label="Terminei">⏹</button>
+    <p class="muted" id="dhint" style="text-align:center;margin:4px 0 0">Ouça o exemplo. Depois toque em Praticar: a pergunta toca e você lê a resposta inteira.</p>
     <div id="sum"></div>
     <div class="row" style="margin-top:14px">
       <button id="prev" ${pos===0?"disabled":""}>‹ Anterior</button>
@@ -248,9 +340,9 @@ VIEWS.dialogo = function(id){
   const $ = x => document.getElementById(x);
   const sentEl = i => $app.querySelector(`.sent[data-i="${i}"]`);
   const hint = t => { $("dhint").textContent = t; };
+  const qBubble = () => $("pq").closest(".bubble");
   function mark(i, cls){ $app.querySelectorAll(".sent").forEach(e => e.classList.remove(cls)); if (i != null && i >= 0) sentEl(i).classList.add(cls); }
 
-  // pré-carrega e analisa os áudios do modelo
   if (dlgAudioOn()) d.a.forEach(s => refAnalysis(s.audio).catch(()=>{}));
 
   $("pq").onclick = () => playFile(d.qAudio);
@@ -263,11 +355,9 @@ VIEWS.dialogo = function(id){
 
   $("ex").onclick = async () => {
     if (mode === "example"){ stopPlayer(); mode = "idle"; $("ex").textContent = "▶ Ouvir exemplo"; mark(null,"playing"); return; }
-    stopRec(true); mode = "example"; $("ex").textContent = "⏹ Parar";
-    audioCtx();
-    $(`pq`).parentElement.parentElement.classList.add("talking");
-    await playFile(d.qAudio);
-    $(`pq`).parentElement.parentElement.classList.remove("talking");
+    if (mode === "rec") return;
+    mode = "example"; $("ex").textContent = "⏹ Parar"; audioCtx();
+    qBubble().classList.add("talking"); await playFile(d.qAudio); qBubble().classList.remove("talking");
     for (let i=0; i<d.a.length; i++){
       if (!alive() || mode !== "example") return;
       mark(i, "playing"); await playFile(d.a[i].audio); await wait(150);
@@ -278,96 +368,106 @@ VIEWS.dialogo = function(id){
   };
 
   $("pr").onclick = async () => {
-    stopPlayer(); stopRec(true); audioCtx();
-    mode = "q"; cur = res.findIndex(r => !r); if (cur < 0){ cur = 0; res.fill(null); d.a.forEach((_,i)=>{ $("sr"+i).innerHTML=""; sentEl(i).classList.remove("done"); }); $("sum").innerHTML=""; }
+    if (mode === "rec" || mode === "eval") return;
+    stopPlayer(); audioCtx(); mode = "q";
+    d.a.forEach((_, i) => { $("sr"+i).innerHTML = ""; sentEl(i).classList.remove("done"); });
+    $("sum").innerHTML = ""; mark(null, "playing");
+    // abre o microfone agora (dentro do toque), uma vez só para toda a seção
+    if (dlgAudioOn()) await ensureMic().catch(() => {});
     hint("Ouça a pergunta…");
-    $(`pq`).parentElement.parentElement.classList.add("talking");
-    await playFile(d.qAudio);
+    qBubble().classList.add("talking"); await playFile(d.qAudio);
     if (!alive()) return;
-    $(`pq`).parentElement.parentElement.classList.remove("talking");
-    ready();
-  };
-  function ready(){
-    mode = "ready"; mark(cur, "current");
-    $("dmic").classList.remove("hidden", "on"); $("dmic").textContent = "🎤";
-    hint(`Frase ${cur+1} de ${d.a.length}: toque no 🎤 e fale. Toque de novo para terminar.`);
-    sentEl(cur).scrollIntoView({block:"center", behavior:"smooth"});
-  }
-
-  $("dmic").onclick = () => {
-    if (mode === "rec"){ stopRec(false); return; }
-    if (mode !== "ready") return;
+    qBubble().classList.remove("talking");
     startRec();
+  };
+  $("dmic").onclick = () => {
+    if (mode === "rec") return stopRec(false);
+    if (mode === "tap") startRec();
   };
 
   function startRec(){
     stopPlayer();
-    mode = "rec"; $("dmic").classList.add("on"); $("dmic").textContent = "⏹";
-    hint("Ouvindo… fale a frase destacada.");
-    const i = cur, t0 = Date.now();
+    const t0 = Date.now();
     let heardAny = false, lastLoud = 0, lastText = 0, capOk = false;
-    audioCtx();
-    recog = listenLong(txt => { heardAny = true; lastText = Date.now(); }, (alts, err) => finish(i, alts, err));
-    if (!recog) return;
+    recog = longRecognizer(txt => {
+      heardAny = true; lastText = Date.now();
+      // destaca a frase em que você provavelmente está
+      const nw = norm(txt, DLG_LANG).length;
+      let i = cum.findIndex(c => c > nw); if (i < 0) i = d.a.length - 1;
+      mark(i, "current");
+    });
+    recog.done.then(res => finish(res));
+    mode = "rec"; mark(0, "current");
+    $("dmic").classList.remove("hidden"); $("dmic").classList.add("on"); $("dmic").textContent = "⏹";
+    hint("Ouvindo… leia a resposta inteira. Toque no ⏹ quando terminar.");
     if (dlgAudioOn()){
       startCapture(level => { if (level > 0.02){ lastLoud = Date.now(); heardAny = true; } })
-        .then(() => { capOk = true; })
-        .catch(() => { capOk = false; });
+        .then(() => { capOk = true; }).catch(() => { capOk = false; });
     }
-    // encerra sozinho depois de ~1,6 s de silêncio (ou 2,8 s sem texto novo), ou aos 30 s
+    // encerra sozinho depois de ~3,5 s de silêncio, ou aos 3 minutos
     autoStop = setInterval(() => {
       const now = Date.now();
-      if (now - t0 > 30000) return stopRec(false);
-      if (!heardAny) { if (now - t0 > 8000) stopRec(false); return; }
-      const quietAudio = capOk ? (now - lastLoud > 1600) : true;
-      const quietText = now - (lastText || t0) > 2800;
+      if (now - t0 > 180000) return stopRec(false);
+      if (!heardAny){ if (now - t0 > 10000) stopRec(false); return; }
+      const quietAudio = capOk ? (now - lastLoud > 3500) : true;
+      const quietText = now - (lastText || t0) > 4000;
       if (quietAudio && quietText) stopRec(false);
-    }, 250);
+    }, 300);
   }
   function stopRec(cancel){
     if (autoStop){ clearInterval(autoStop); autoStop = null; }
-    if (cancel){ if (recog){ recog.onend = null; recog.onresult = null; try{ recog.abort(); }catch(e){} recog = null; }
-      stopCapture(); if (mode === "rec") mode = "idle"; return; }
-    if (recog){ try{ recog.stop(); }catch(e){} }
+    if (cancel){ if (recog) recog.abort(); recog = null; stopCapture(); if (mode === "rec") mode = "idle"; return; }
+    if (mode !== "rec") return;
+    mode = "eval";
+    if (recog) recog.stop();
     $("dmic").classList.remove("on"); $("dmic").textContent = "⏳";
-    hint("Avaliando…");
+    hint("Avaliando a resposta inteira…");
   }
 
-  async function finish(i, alts, err){
-    recog = null;
+  async function finish(res){
     if (autoStop){ clearInterval(autoStop); autoStop = null; }
+    recog = null;
     const cap = stopCapture();
-    if (!alive()) return;
-    if (err){
+    if (!alive() || res.err === "aborted") return;
+    mark(null, "current");
+    if (res.err){
       const msg = {
         "not-allowed":"Permissão negada. Ative o microfone para o Safari e o Ditado em Ajustes › Geral › Teclado.",
         "service-not-allowed":"O iPhone bloqueou o reconhecimento. Ative o Ditado em Ajustes › Geral › Teclado.",
-        "no-speech":"Não ouvi nada. Toque no 🎤 e fale logo em seguida.",
+        "start-failed":"O iPhone não deixou começar sozinho. Toque no 🎤 para ler a resposta.",
+        "no-speech":"Não ouvi nada. Toque no 🎤 e leia a resposta.",
         "audio-capture":"O microfone ficou ocupado. Desliguei a análise de fluência e entonação; tente de novo.",
         "network":"O reconhecimento de voz precisa de internet.",
         "unsupported":"Este navegador não reconhece voz. Use o Safari do iPhone."
-      }[err] || ("Erro no reconhecimento: " + err);
-      if (err === "audio-capture"){ DB.settings.dlgAudio = false; save(); }
-      toast(msg, 4500); ready(); return;
+      }[res.err] || ("Erro no reconhecimento: " + res.err);
+      if (res.err === "audio-capture"){ DB.settings.dlgAudio = false; save(); }
+      toast(msg, 4500);
+      mode = "tap"; $("dmic").classList.remove("hidden", "on"); $("dmic").textContent = "🎤";
+      hint("Toque no 🎤 e leia a resposta inteira.");
+      return;
     }
-    const s = d.a[i];
-    const pron = evaluate(s.t, alts, DLG_LANG);
-    let flu = null, into = null, usr = null, ref = null;
-    if (cap && cap.samples.length > cap.sr*0.3){
-      try { ref = await refAnalysis(s.audio); usr = analyzeSpeech(cap.samples, cap.sr); } catch(e){}
-      flu = fluencyScore(ref, usr); into = intonationScore(ref, usr);
+    $("dmic").classList.add("hidden");
+    const pron = evaluateAnswer(d.a, res.alts);
+    let segs = d.a.map(() => null), refs = d.a.map(() => null);
+    if (cap && cap.samples.length > cap.sr*0.5){
+      try {
+        refs = await Promise.all(d.a.map(s => refAnalysis(s.audio)));
+        segs = splitBySentences(cap.samples, cap.sr, refs.map(r => r ? r.dur : 1));
+      } catch(e){}
     }
     if (!alive()) return;
-    const parts = [pron.score, flu && flu.score, into && into.score];
-    const w = [0.5, 0.25, 0.25];
-    let tot = 0, ws = 0; parts.forEach((p,k) => { if (p != null){ tot += p*w[k]; ws += w[k]; } });
-    res[i] = {pron: pron.score, flu: flu && flu.score, int: into && into.score, total: Math.round(tot/ws),
-              words: norm(s.t, DLG_LANG).length, rec: cap};
-    renderResult(i, pron, flu, into);
-    sentEl(i).classList.add("done");
-    const nxt = res.findIndex(r => !r);
-    if (nxt < 0){ mode = "idle"; mark(null, "current"); $("dmic").classList.add("hidden"); summary(); }
-    else { cur = nxt; ready(); }
+    const results = d.a.map((s, i) => {
+      const p = pron.per[i], seg = segs[i];
+      const flu = seg && refs[i] ? fluencyScore(refs[i], seg.an) : null;
+      const into = seg && refs[i] ? intonationScore(refs[i], seg.an) : null;
+      const parts = [p.score, flu && flu.score, into && into.score], w = [0.5, 0.25, 0.25];
+      let tot = 0, ws = 0; parts.forEach((v,k) => { if (v != null){ tot += v*w[k]; ws += w[k]; } });
+      return {pron: p.score, flu: flu && flu.score, int: into && into.score, total: Math.round(tot/ws),
+              words: p.words, p, fluD: flu, intoD: into, seg};
+    });
+    results.forEach((r, i) => { renderResult(i, r); sentEl(i).classList.add("done"); });
+    mode = "idle";
+    summary(results, pron.heard);
   }
 
   function chip(label, v){
@@ -375,12 +475,12 @@ VIEWS.dialogo = function(id){
     const c = v >= 80 ? "ok" : v >= 60 ? "mid" : "bad";
     return `<span class="chip ${c}">${label} ${v}</span>`;
   }
-  function renderResult(i, pron, flu, into){
-    const r = res[i];
-    const words = pron.ops.filter(o => o.t).map(o => {
+  function renderResult(i, r){
+    const words = r.p.ops.map(o => {
       const cls = o.sim >= 0.999 ? "w-ok" : o.sim >= 0.6 ? "w-near" : o.h ? "w-bad" : "w-miss";
       return `<span class="${cls}" data-w="${esc(o.t)}">${esc(o.t)}</span>`; }).join(" ");
     const tips = [];
+    const flu = r.fluD, into = r.intoD;
     if (flu){ if (flu.ratio > 1.5) tips.push("fale um pouco mais rápido e emende as palavras");
       if (flu.extra > 0) tips.push(`${flu.extra} pausa${flu.extra>1?"s":""} a mais que o modelo`); }
     if (into){ if (into.flat) tips.push("voz muito reta: varie mais a melodia");
@@ -388,22 +488,19 @@ VIEWS.dialogo = function(id){
     $("sr"+i).innerHTML = `
       <div class="chips"><b class="tot">${r.total}%</b>${chip("Pronúncia", r.pron)}${chip("Fluência", r.flu)}${chip("Entonação", r.int)}</div>
       <div class="wres small">${words}</div>
-      <div class="heard">Entendi: “${esc(pron.heard)}”</div>
+      ${r.p.heard.length ? `<div class="heard">Entendi: “${esc(r.p.heard.join(" "))}”</div>` : `<div class="heard">Não ouvi esta frase.</div>`}
       ${tips.length ? `<div class="heard">💡 ${tips.join(" · ")}</div>` : ""}
       <div class="sbtn"><button class="small" data-act="model">🔊 Modelo</button>
-        ${r.rec ? `<button class="small" data-act="mine">▶ Minha voz</button>` : ""}
-        <button class="small" data-act="redo">↻ Repetir</button></div>`;
+        ${r.seg ? `<button class="small" data-act="mine">▶ Minha voz</button>` : ""}</div>`;
     $("sr"+i).querySelectorAll("[data-w]").forEach(el => el.onclick = () => speak(el.dataset.w, DLG_LANG, 0.8));
     $("sr"+i).querySelectorAll("[data-act]").forEach(b => b.onclick = ev => {
       ev.stopPropagation();
       if (b.dataset.act === "model") playFile(d.a[i].audio);
-      if (b.dataset.act === "mine") playSamples(r.rec.samples, r.rec.sr);
-      if (b.dataset.act === "redo"){ if (mode === "rec") return; stopPlayer(); cur = i; $("sum").innerHTML = ""; ready(); }
+      if (b.dataset.act === "mine") playSamples(r.seg.samples, AN_SR);
     });
   }
 
-  function summary(){
-    const tw = res.reduce((s,r) => s + r.words, 0);
+  function summary(res){
     const avg = k => { let s = 0, w = 0; res.forEach(r => { if (r[k] != null){ s += r[k]*r.words; w += r.words; } }); return w ? Math.round(s/w) : null; };
     const P = avg("pron"), F = avg("flu"), I = avg("int"), T = avg("total");
     const st = dlgStats(), old = st[d.id];
@@ -411,12 +508,12 @@ VIEWS.dialogo = function(id){
     const bar = (l, v) => `<div class="sbar"><span>${l}</span><div><i style="width:${v||0}%;background:${v>=80?"var(--ok)":v>=60?"var(--warn)":"var(--bad)"}"></i></div><b>${v==null?"–":v}</b></div>`;
     $("sum").innerHTML = `<div class="box" style="margin-top:14px">
       <div style="text-align:center"><div class="score" style="color:${T>=80?"var(--ok)":T>=60?"var(--warn)":"var(--bad)"}">${T}%</div>
-      <div class="muted">${T>=85?"Excelente! 🎉":T>=70?"Muito bom, mais uma rodada e fica natural.":"Repita as frases com nota baixa ouvindo o modelo antes."}${old?` · melhor: ${st[d.id].best}%`:""}</div></div>
+      <div class="muted">${T>=85?"Excelente! 🎉":T>=70?"Muito bom, mais uma rodada e fica natural.":"Ouça o modelo das frases com nota baixa e leia de novo."}${old?` · melhor: ${st[d.id].best}%`:""}</div></div>
       ${bar("Pronúncia", P)}${bar("Fluência", F)}${bar("Entonação", I)}
-      <div class="row" style="margin-top:12px"><button id="again">↻ Fazer de novo</button>
+      <div class="row" style="margin-top:12px"><button id="again">↻ Ler de novo</button>
         ${pos < all.length-1 ? `<button class="primary" id="go2">Próximo ›</button>` : ""}</div></div>`;
-    hint("Exercício concluído.");
-    $("again").onclick = () => go("dialogo", d.id, true);
+    hint("Exercício concluído. As notas de cada frase estão acima.");
+    $("again").onclick = () => $("pr").click();
     if ($("go2")) $("go2").onclick = () => go("dialogo", all[pos+1].id, true);
     $("sum").scrollIntoView({behavior:"smooth"});
   }
