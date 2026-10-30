@@ -255,4 +255,5 @@ async def main():
          json.dumps(out, ensure_ascii=False, indent=1) + ";\n"
     (ROOT / "dialogs-data.js").write_text(js, encoding="utf-8")
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
