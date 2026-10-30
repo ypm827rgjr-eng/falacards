@@ -25,7 +25,7 @@ to of in on at by for from with without into onto over under about as per via up
 i me my mine we us our ours you your yours he him his she her it its they them their
 is am are was were be been being do does did have has had will would can could should may might must shall
 not no just also too very what which who whom whose where when while how why all any each both every some
-such own same other another let let's i'm i'd i've i'll you're you'd you've you'll we're we'd we'll we've
+such own same let let's i'm i'd i've i'll you're you'd you've you'll we're we'd we'll we've
 it's that's what's there's they're don't doesn't didn't isn't aren't wasn't weren't can't won't couldn't wouldn't shouldn't
 """.split())
 
@@ -97,7 +97,7 @@ def word_tokens(text):
     """Quebra a frase em palavras exibidas, com sílabas coloridas e marca de pausa."""
     out = []
     for raw in text.split():
-        m = re.match(r"^([\"“(]*)(.*?)([\"”),.;:!?]*)$", raw)
+        m = re.match(r"^([\"“('‘]*)(.*?)([\"”'’),.;:!?]*)$", raw)
         pre, core, post = m.groups()
         if re.fullmatch(r"[A-Z](\.[A-Z])+", core) and post.startswith("."):  # U.S. não é fim de frase
             core, post = core + ".", post[1:]

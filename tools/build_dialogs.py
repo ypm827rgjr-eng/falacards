@@ -216,6 +216,88 @@ SETS = [
       ["and I use AI tools to speed up analysis, always validating the numbers myself."],
     ]},
   ]},
+  {"id": "fpa", "name": "Entrevista FP&A – revisão de pacotes (cartões)", "only": "prompter", "dialogs": [
+    # Bloco 1 — Pacotes de variação e forecast
+    {"q": "Tell me about your FP&A experience.", "q_tts": "Tell me about your F P and A experience.", "a": [
+      ["I have 17 years in accounting and finance at multinational companies: Ottobock, FMC and Glovis Brasil.",
+       "I have 17 years in accounting and finance at multinational companies: Ottobock, F M C and Glovis Brasil."],
+      ["For the last six years I was Finance and Controlling Manager at Glovis."],
+      ["Every month I prepared variance packages comparing actuals, budget and forecast,"],
+      ["with driver commentary for leadership and for our headquarters."],
+      ["I also led the annual budget and consolidated the submissions from the business units."],
+    ]},
+    {"q": "How do you check that a variance bridge reconciles?", "a": [
+      ["First, the starting point and the end point must match the budget and the actuals exactly."],
+      ["Second, the sum of all driver effects must equal the total variance, with no unexplained difference."],
+      ["Third, each driver is calculated in a consistent order, for example volume first and then price,"],
+      ["so there is no double counting."],
+      ["Finally, I check that the same numbers appear in the model and in the deck."],
+    ]},
+    {"q": "What do you do when the drivers don't fully explain the gap?", "a": [
+      ["I look at the residual in a fixed order:"],
+      ["timing issues like accruals and cut-off, then one-off items and reclassifications, then mix effects hidden inside a driver."],
+      ["In logistics, a common case was freight cost:"],
+      ["the total looked fine, but the margin moved because of the mix between our own fleet, outsourced carriers and owner-operators."],
+      ["I never leave an unexplained 'other' line in front of leadership."],
+    ]},
+    {"q": "What goes into a forecast assumption memo?", "a": [
+      ["For each line item that changed: the old assumption, the new assumption, the reason for the change, and the impact in numbers."],
+      ["It should also say who provided the information and how confident we are."],
+      ["The goal is that anyone reading it next month understands why the forecast moved."],
+    ]},
+    # Bloco 2 — Economia de cartões
+    {"q": "Have you worked at a card issuer or consumer lender?", "a": [
+      ["No. My FP&A experience is in logistics, agribusiness and medical devices.",
+       "No. My F P and A experience is in logistics, agribusiness and medical devices."],
+      ["But I understand the economics of a card business, and the core FP&A work is the same:",
+       "But I understand the economics of a card business, and the core F P and A work is the same:"],
+      ["building variance bridges, checking that drivers reconcile and making sure the model and the deck tell the same story."],
+    ]},
+    {"q": "What are the main revenue and cost drivers of a credit card portfolio?", "a": [
+      ["On the revenue side: net interest income from revolving balances, interchange from purchase volume, and fees."],
+      ["On the cost side: credit losses, cost of funds, rewards, and operating costs like servicing, fraud and collections."],
+      ["Credit losses are usually the biggest swing factor."],
+    ]},
+    {"q": "Net interest margin is below budget. How would you break down the variance?", "a": [
+      ["I would split it into three parts."],
+      ["Volume: average revolving balances were lower or higher than planned."],
+      ["Rate: the yield charged to customers changed, for example because of promotional rates."],
+      ["And cost of funds: our funding cost moved with market rates."],
+      ["Then I'd check that the three effects add up to the total variance."],
+    ]},
+    {"q": "Why are losses tracked by vintage?", "a": [
+      ["Because accounts opened in the same period tend to behave similarly as they mature."],
+      ["Losses usually rise in the first months, peak, and then stabilize."],
+      ["Looking by vintage shows whether a new group of customers is performing worse than older ones,"],
+      ["which you can't see in the total loss rate."],
+      ["In my treasury work, the closest equivalent was following receivables aging by customer group."],
+    ]},
+    {"q": "What would make interchange revenue unrealistic in a forecast?", "a": [
+      ["If it grows faster than purchase volume without a reason, like a change in the merchant mix or in rates."],
+      ["Interchange should follow spend."],
+      ["I would also check the number of active accounts and the spend per account,"],
+      ["because a forecast that shows both growing fast at the same time needs a clear explanation."],
+    ]},
+    # Bloco 3 — O trabalho de revisão
+    {"q": "How would you decide if a task packet looks realistic?", "a": [
+      ["I'd ask three questions."],
+      ["Would a finance director really ask this, in this way?"],
+      ["Do the files look like what a real team would have, with the right level of detail and some normal imperfections?"],
+      ["And are the numbers consistent: do the totals tie across the model, the data and the deck?"],
+      ["If something is too clean or too convenient, it's probably not realistic."],
+    ]},
+    {"q": "You have 24 hours per batch. How do you manage your time and quality?", "a": [
+      ["I'd follow the same checklist for every packet, so nothing is skipped:"],
+      ["first the request, then the reconciliation of the numbers, then the consistency between model and deck, and finally the answer key."],
+      ["I'd keep notes as I go and do a quick final review before submitting."],
+      ["For me, a deadline is a commitment."],
+    ]},
+    {"q": "Why are you interested in this work?", "a": [
+      ["Because it uses exactly what I did every month for years:"],
+      ["checking whether the numbers make sense and whether the explanation matches the data."],
+      ["I also use AI tools in my work, and I like the idea of helping these tools understand how real finance teams think."],
+    ]},
+  ]},
 ]
 
 async def tts(text, voice, path, rate="+0%"):
@@ -250,7 +332,8 @@ async def main():
                 sents.append({"t": a[0], "audio": af})
             ds.append({"id": did, "q": d["q"], "qAudio": qf, "note": d.get("note", ""), "a": sents})
             print(did, "ok")
-        out.append({"id": s["id"], "name": s["name"], "dialogs": ds})
+        if s.get("only") != "prompter":  # conjuntos só do Teleprompter não entram nos Diálogos
+            out.append({"id": s["id"], "name": s["name"], "dialogs": ds})
     js = "// Gerado por tools/build_dialogs.py — não edite à mão.\nconst DIALOG_SETS = " + \
          json.dumps(out, ensure_ascii=False, indent=1) + ";\n"
     (ROOT / "dialogs-data.js").write_text(js, encoding="utf-8")
